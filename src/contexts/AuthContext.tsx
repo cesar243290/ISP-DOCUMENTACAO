@@ -1,13 +1,9 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { authAPI, api, User as APIUser } from '../lib/api';
-
-interface User {
-  id: string;
-  email: string;
-  full_name: string;
-  role: string;
-}
+import { supabase } from '../lib/supabase';
+import { User } from '../types';
+import { verifyPassword } from '../lib/auth';
+import { logAudit } from '../lib/audit';
 
 interface AuthContextType {
   user: User | null;
@@ -29,17 +25,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   async function checkSession() {
     try {
-      const token = api.getToken();
-      if (!token) {
+      const sessionToken = localStorage.getItem('session_token');
+      if (!sessionToken) {
         setLoading(false);
         return;
       }
 
-      const response = await authAPI.me();
-      setUser(response.user);
+      const { data: session } = await supabase
+        .from('sessions')
+        .select('user_id, expires_at')
+        .eq('token', sessionToken)
+        .single();
+
+      if (!session || new Date(session.expires_at) < new Date()) {
+        localStorage.removeItem('session_token');
+        setLoading(false);
+        return;
+      }
+
+      const { data: userData } = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', session.user_id)
+        .single();
+
+      if (userData && userData.is_active) {
+        setUser(userData);
+      }
     } catch (error) {
       console.error('Session check error:', error);
-      api.removeToken();
     } finally {
       setLoading(false);
     }
@@ -47,24 +61,85 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   async function login(email: string, password: string) {
     try {
-      const response = await authAPI.login(email, password);
-      setUser(response.user);
+      const { data: userData, error } = await supabase
+        .from('users')
+        .select('*')
+        .eq('email', email)
+        .eq('is_active', true)
+        .maybeSingle();
+
+      if (error || !userData) {
+        await logAudit({
+          action: 'LOGIN_FAILED',
+          entity_type: 'user',
+          after_data: { email }
+        });
+        throw new Error('Credenciais inválidas');
+      }
+
+      const isValid = await verifyPassword(password, userData.password_hash);
+
+      if (!isValid) {
+        await logAudit({
+          user_id: userData.id,
+          action: 'LOGIN_FAILED',
+          entity_type: 'user',
+          entity_id: userData.id
+        });
+        throw new Error('Credenciais inválidas');
+      }
+
+      const sessionToken = crypto.randomUUID();
+      const expiresAt = new Date();
+      expiresAt.setHours(expiresAt.getHours() + 8);
+
+      await supabase.from('sessions').insert({
+        user_id: userData.id,
+        token: sessionToken,
+        expires_at: expiresAt.toISOString()
+      });
+
+      await supabase
+        .from('users')
+        .update({ last_login: new Date().toISOString() })
+        .eq('id', userData.id);
+
+      await logAudit({
+        user_id: userData.id,
+        action: 'LOGIN_SUCCESS',
+        entity_type: 'user',
+        entity_id: userData.id
+      });
+
+      localStorage.setItem('session_token', sessionToken);
+      setUser(userData);
       navigate('/dashboard');
-    } catch (error: any) {
-      throw new Error(error.message || 'Erro ao fazer login');
+    } catch (error) {
+      throw error;
     }
   }
 
   async function logout() {
     try {
-      await authAPI.logout();
+      const sessionToken = localStorage.getItem('session_token');
+      if (sessionToken) {
+        await supabase.from('sessions').delete().eq('token', sessionToken);
+      }
+
+      if (user) {
+        await logAudit({
+          user_id: user.id,
+          action: 'LOGOUT',
+          entity_type: 'user',
+          entity_id: user.id
+        });
+      }
+
+      localStorage.removeItem('session_token');
       setUser(null);
       navigate('/login');
     } catch (error) {
       console.error('Logout error:', error);
-      api.removeToken();
-      setUser(null);
-      navigate('/login');
     }
   }
 

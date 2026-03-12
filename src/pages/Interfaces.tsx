@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { api } from '../lib/api';
+import { supabase } from '../lib/supabase';
+import { canManage } from '../lib/utils';
 import { Card } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
 import { Input } from '../components/ui/Input';
@@ -52,12 +53,28 @@ export function Interfaces() {
 
   async function loadInterfaces() {
     try {
-      const [interfaceData, equipmentData, linkData, vlanData] = await Promise.all([
-        api.get('/interfaces'),
-        api.get('/equipment'),
-        api.get('/interface_links'),
-        api.get('/vlans')
+      const [
+        { data: interfaceData, error: interfaceError },
+        { data: equipmentData, error: equipmentError },
+        { data: linkData, error: linkError },
+        { data: vlanData, error: vlanError }
+      ] = await Promise.all([
+        supabase.from('interfaces').select('*, equipment(*)'),
+        supabase.from('equipment').select('*'),
+        supabase.from('interface_links').select(`
+          *,
+          interface_a:interface_a_id(*),
+          interface_b:interface_b_id(*),
+          equipment_a:interface_a_id(equipment(*)),
+          equipment_b:interface_b_id(equipment(*))
+        `),
+        supabase.from('vlans').select('*')
       ]);
+
+      if (interfaceError) throw interfaceError;
+      if (equipmentError) throw equipmentError;
+      if (linkError) throw linkError;
+      if (vlanError) throw vlanError;
 
       if (interfaceData) setInterfaces(interfaceData);
       if (equipmentData) setEquipments(equipmentData);
@@ -264,6 +281,8 @@ export function Interfaces() {
     );
   }
 
+  const userCanManage = user ? canManage(user.role) : false;
+
   const filteredInterfaces = interfaces.filter(iface =>
     iface.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     iface.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -287,7 +306,7 @@ export function Interfaces() {
           <h1 className="text-3xl font-semibold text-gray-900 dark:text-gray-100">Interfaces</h1>
           <p className="text-gray-600 dark:text-gray-400 mt-1">Interfaces de rede e enlaces entre equipamentos</p>
         </div>
-        {canManage(user!.role) && (
+        {userCanManage && (
           <div className="flex gap-3 flex-wrap">
             <Button variant="secondary" onClick={() => setShowLinkModal(true)}>
               <Cable className="w-4 h-4 mr-2" />
@@ -378,7 +397,7 @@ export function Interfaces() {
                 )}
               </div>
 
-              {canManage(user!.role) && (
+              {userCanManage && (
                 <div className="flex gap-2 pt-3 border-t dark:border-gray-700">
                   <Button
                     variant="secondary"

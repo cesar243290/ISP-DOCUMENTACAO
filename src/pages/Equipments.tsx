@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { api } from '../lib/api';
+import { supabase } from '../lib/supabase';
+import { canManage } from '../lib/utils';
 import { Equipment, POP } from '../types';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
@@ -46,10 +47,13 @@ export function Equipments() {
 
   async function loadData() {
     try {
-      const [equipmentData, popData] = await Promise.all([
-        api.get('/equipment'),
-        api.get('/pops')
+      const [{ data: equipmentData, error: equipmentError }, { data: popData, error: popError }] = await Promise.all([
+        supabase.from('equipment').select('*'),
+        supabase.from('pops').select('*')
       ]);
+
+      if (equipmentError) throw equipmentError;
+      if (popError) throw popError;
 
       if (equipmentData) setEquipments(equipmentData);
       if (popData) setPops(popData);
@@ -172,6 +176,8 @@ export function Equipments() {
     return matchesSearch && matchesType && matchesStatus && matchesPop;
   });
 
+  const userCanManage = user ? canManage(user.role) : false;
+
   const statusColors: Record<string, 'success' | 'warning' | 'danger' | 'default'> = {
     ACTIVE: 'success',
     MAINTENANCE: 'warning',
@@ -196,7 +202,7 @@ export function Equipments() {
           <h1 className="text-3xl font-semibold text-gray-900 dark:text-gray-100">Equipamentos</h1>
           <p className="text-gray-600 dark:text-gray-400 mt-1">Inventário completo de equipamentos de rede</p>
         </div>
-        {canManage(user!.role) && (
+        {userCanManage && (
           <Button onClick={() => setShowModal(true)}>
             <Plus className="w-4 h-4 mr-2" />
             Novo Equipamento
@@ -293,7 +299,7 @@ export function Equipments() {
               </div>
             </div>
 
-            {canManage(user!.role) && (
+            {userCanManage && (
               <div className="space-y-2 pt-3 border-t dark:border-gray-700">
                 <Button
                   variant="outline"

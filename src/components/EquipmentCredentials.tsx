@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { api } from '../lib/api';
+import { supabase } from '../lib/supabase';
 import { Modal } from './ui/Modal';
 import { Button } from './ui/Button';
 import { Input } from './ui/Input';
@@ -54,6 +54,18 @@ export function EquipmentCredentials({ equipmentId, equipmentName, isOpen, onClo
       loadCredentials();
     }
   }, [isOpen, equipmentId]);
+
+  async function encrypt(value: string): Promise<string> {
+    return btoa(value);
+  }
+
+  async function decrypt(value: string): Promise<string> {
+    try {
+      return atob(value);
+    } catch {
+      return value;
+    }
+  }
 
   async function loadCredentials() {
     setLoading(true);

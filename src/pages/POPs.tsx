@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { api } from '../lib/api';
+import { supabase } from '../lib/supabase';
+import { userCanManage } from '../lib/utils';
 import { POP } from '../types';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
@@ -35,7 +36,11 @@ export function POPs() {
 
   async function loadPOPs() {
     try {
-      const data = await api.get('/pops');
+      const { data, error } = await supabase
+        .from('pops')
+        .select('*');
+
+      if (error) throw error;
       if (data) setPops(data);
     } catch (error) {
       console.error('Error loading POPs:', error);
@@ -50,10 +55,23 @@ export function POPs() {
 
     try {
       if (isEditing && editingId) {
-        const data = await api.put(`/pops/${editingId}`, formData);
+        const { data, error } = await supabase
+          .from('pops')
+          .update(formData)
+          .eq('id', editingId)
+          .select()
+          .single();
+
+        if (error) throw error;
         showToast('POP atualizado com sucesso', 'success');
       } else {
-        const data = await api.post('/pops', formData);
+        const { data, error } = await supabase
+          .from('pops')
+          .insert([formData])
+          .select()
+          .single();
+
+        if (error) throw error;
         showToast('POP criado com sucesso', 'success');
       }
 
@@ -97,7 +115,12 @@ export function POPs() {
 
   async function handleDelete(id: string) {
     try {
-      await api.delete(`/pops/${id}`);
+      const { error } = await supabase
+        .from('pops')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
       showToast('POP excluído com sucesso', 'success');
       setDeleteConfirm(null);
       loadPOPs();
@@ -114,7 +137,7 @@ export function POPs() {
     resetForm();
   }
 
-  const canManage = user?.role === 'admin';
+  const userCanManage = user ? userCanManage(user.role) : false;
 
   if (loading) {
     return (
@@ -133,7 +156,7 @@ export function POPs() {
           <h1 className="text-3xl font-semibold text-gray-900 dark:text-gray-100">POPs / Sites</h1>
           <p className="text-gray-600 dark:text-gray-400 mt-1">Pontos de Presença da rede</p>
         </div>
-        {canManage && (
+        {userCanManage && (
           <Button onClick={() => setShowModal(true)}>
             <Plus className="w-4 h-4 mr-2" />
             Novo POP
@@ -169,7 +192,7 @@ export function POPs() {
               )}
             </div>
 
-            {canManage(user!.role) && (
+            {userCanManage(user!.role) && (
               <div className="flex gap-2 pt-3 border-t dark:border-gray-700">
                 <Button
                   variant="secondary"

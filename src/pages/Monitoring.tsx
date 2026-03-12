@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { api } from '../lib/api';
+import { supabase } from '../lib/supabase';
+import { canManage } from '../lib/utils';
 import { Card } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
@@ -327,6 +328,8 @@ export function Monitoring() {
     ZABBIX: Activity
   };
 
+  const userCanManage = user ? canManage(user.role) : false;
+
   const typeColors: Record<string, 'success' | 'info' | 'warning'> = {
     ICMP: 'success',
     SNMP: 'info',
@@ -369,7 +372,7 @@ export function Monitoring() {
             <RefreshCw className={`w-4 h-4 mr-2 ${autoRefreshing ? 'animate-spin' : ''}`} />
             Atualizar Agora
           </Button>
-          {canManage(user!.role) && (
+          {userCanManage && (
             <Button onClick={() => setShowModal(true)}>
               <Plus className="w-4 h-4 mr-2" />
               Nova Configuração
@@ -477,7 +480,7 @@ export function Monitoring() {
                     )}
                   </Button>
 
-                  {canManage(user!.role) && (
+                  {userCanManage && (
                     <div className="flex gap-2">
                       <Button
                         variant="secondary"

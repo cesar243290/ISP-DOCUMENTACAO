@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { api } from '../lib/api';
+import { supabase } from '../lib/supabase';
+import { canManage } from '../lib/utils';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
@@ -34,7 +35,11 @@ export function IPAM() {
 
   async function loadSubnets() {
     try {
-      const { data } = await api.get('/subnets');
+      const { data, error } = await supabase
+        .from('subnets')
+        .select('*');
+
+      if (error) throw error;
       if (data) setSubnets(data);
     } catch (error) {
       console.error('Error loading subnets:', error);
@@ -133,6 +138,8 @@ export function IPAM() {
     resetForm();
   }
 
+  const userCanManage = user ? canManage(user.role) : false;
+
   const typeColors: Record<string, 'success' | 'info' | 'warning' | 'default'> = {
     CLIENT: 'success',
     MGMT: 'info',
@@ -158,7 +165,7 @@ export function IPAM() {
           <h1 className="text-3xl font-semibold text-gray-900 dark:text-gray-100">IPAM</h1>
           <p className="text-gray-600 dark:text-gray-400 mt-1">Gerenciamento de endereços IP e sub-redes</p>
         </div>
-        {canManage(user!.role) && (
+        {userCanManage && (
           <Button onClick={() => setShowModal(true)}>
             <Plus className="w-4 h-4 mr-2" />
             Nova Sub-rede
@@ -197,7 +204,7 @@ export function IPAM() {
                   )}
                 </div>
 
-                {canManage(user!.role) && (
+                {userCanManage && (
                   <div className="flex gap-2">
                     <Button
                       variant="secondary"

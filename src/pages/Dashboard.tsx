@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { api } from '../lib/api';
+import { supabase } from '../lib/supabase';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card';
 import { Server, Network, Box, AlertCircle } from 'lucide-react';
 
@@ -19,9 +19,17 @@ export function Dashboard() {
 
   async function loadStats() {
     try {
-      const equipment = await api.get('/equipment');
-      const interfaces = await api.get('/interfaces');
-      const pops = await api.get('/pops');
+      const { data: equipment } = await supabase
+        .from('equipment')
+        .select('id, status');
+
+      const { data: interfaces } = await supabase
+        .from('interfaces')
+        .select('id');
+
+      const { data: pops } = await supabase
+        .from('pops')
+        .select('id');
 
       const activeEquipment = equipment?.filter((e: any) => e.status === 'ACTIVE').length || 0;
       const failedEquipment = equipment?.filter((e: any) => e.status === 'FAILED').length || 0;

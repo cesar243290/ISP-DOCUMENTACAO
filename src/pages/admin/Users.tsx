@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { api } from '../../lib/api';
+import { supabase } from '../../lib/supabase';
 import { User } from '../../types';
 import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
@@ -39,7 +39,11 @@ export function Users() {
 
   async function loadUsers() {
     try {
-      const { data } = await api.get('/users');
+      const { data, error } = await supabase
+        .from('users')
+        .select('*');
+
+      if (error) throw error;
       if (data) setUsers(data);
     } catch (error) {
       console.error('Error loading users:', error);
@@ -68,22 +72,32 @@ export function Users() {
 
         showToast('Usuário atualizado com sucesso', 'success');
       } else {
-        const passwordHash = await hashPassword(formData.password);
+        const { data: authData, error: authError } = await supabase.auth.signUp({
+          email: formData.email,
+          password: formData.password,
+          options: {
+            data: {
+              full_name: formData.full_name,
+              role: formData.role
+            }
+          }
+        });
 
-        const { password, ...userDataWithoutPassword } = formData;
+        if (authError) throw authError;
 
-        const { data, error } = await supabase
-          .from('users')
-          .insert([{
-            ...userDataWithoutPassword,
-            password_hash: passwordHash,
-            is_active: true
-          }])
-          .select()
-          .single();
+        if (authData.user) {
+          const { password, ...userDataWithoutPassword } = formData;
 
-        if (error) throw error;
+          const { error: insertError } = await supabase
+            .from('users')
+            .insert([{
+              id: authData.user.id,
+              ...userDataWithoutPassword,
+              is_active: true
+            }]);
 
+          if (insertError) throw insertError;
+        }
 
         showToast('Usuário criado com sucesso', 'success');
       }
@@ -137,14 +151,17 @@ export function Users() {
     if (!passwordUserId || !newPassword) return;
 
     try {
-      const passwordHash = await hashPassword(newPassword);
+      const { error } = await supabase.auth.admin.updateUserById(
+        passwordUserId,
+        { password: newPassword }
+      );
 
-      const { error } = await supabase
-        .from('users')
-        .update({ password_hash: passwordHash })
-        .eq('id', passwordUserId);
+      if (error && error.message.includes('admin')) {
+        showToast('Funcionalidade requer acesso admin. Use o Supabase Dashboard para alterar senhas.', 'error');
+        return;
+      }
 
-      if (error) throw error;
+      if (updateError) throw updateError;
 
 
       showToast('Senha alterada com sucesso', 'success');

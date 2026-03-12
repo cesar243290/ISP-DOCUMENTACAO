@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { api } from '../lib/api';
+import { supabase } from '../lib/supabase';
+import { canManage } from '../lib/utils';
 import { Card } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
@@ -36,7 +37,11 @@ export function Circuits() {
 
   async function loadCircuits() {
     try {
-      const { data } = await api.get('/circuits');
+      const { data, error } = await supabase
+        .from('circuits')
+        .select('*');
+
+      if (error) throw error;
       if (data) setCircuits(data);
     } catch (error) {
       console.error('Error loading circuits:', error);
@@ -139,6 +144,8 @@ export function Circuits() {
     resetForm();
   }
 
+  const userCanManage = user ? canManage(user.role) : false;
+
   const statusColors: Record<string, 'success' | 'warning' | 'danger' | 'default'> = {
     ACTIVE: 'success',
     MAINTENANCE: 'warning',
@@ -163,7 +170,7 @@ export function Circuits() {
           <h1 className="text-3xl font-semibold text-gray-900 dark:text-gray-100">Circuitos & Enlaces</h1>
           <p className="text-gray-600 dark:text-gray-400 mt-1">Gestão de circuitos e enlaces de rede</p>
         </div>
-        {canManage(user!.role) && (
+        {userCanManage && (
           <Button onClick={() => setShowModal(true)}>
             <Plus className="w-4 h-4 mr-2" />
             Novo Circuito
@@ -212,7 +219,7 @@ export function Circuits() {
               )}
             </div>
 
-            {canManage(user!.role) && (
+            {userCanManage && (
               <div className="flex gap-2 pt-3 border-t dark:border-gray-700">
                 <Button
                   variant="secondary"

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { api } from '../lib/api';
+import { supabase } from '../lib/supabase';
+import { canManage } from '../lib/utils';
 import { Card } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
@@ -31,7 +32,11 @@ export function Checklists() {
 
   async function loadChecklists() {
     try {
-      const { data } = await api.get('/checklists');
+      const { data, error } = await supabase
+        .from('checklists')
+        .select('*');
+
+      if (error) throw error;
       if (data) setChecklists(data);
     } catch (error) {
       console.error('Error loading checklists:', error);
@@ -126,6 +131,8 @@ export function Checklists() {
     resetForm();
   }
 
+  const userCanManage = user ? canManage(user.role) : false;
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -143,7 +150,7 @@ export function Checklists() {
           <h1 className="text-3xl font-semibold text-gray-900 dark:text-gray-100">Checklists</h1>
           <p className="text-gray-600 dark:text-gray-400 mt-1">Checklists operacionais e procedimentos</p>
         </div>
-        {canManage(user!.role) && (
+        {userCanManage && (
           <Button onClick={() => setShowModal(true)}>
             <Plus className="w-4 h-4 mr-2" />
             Novo Checklist
@@ -169,7 +176,7 @@ export function Checklists() {
                 <p className="text-sm text-gray-600 dark:text-gray-400 mt-3">{checklist.description}</p>
               )}
 
-              {canManage(user!.role) && (
+              {userCanManage && (
                 <div className="flex gap-2 pt-3 mt-3 border-t dark:border-gray-700">
                   <Button
                     variant="secondary"

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { api } from '../lib/api';
+import { supabase } from '../lib/supabase';
+import { canManage } from '../lib/utils';
 import { VLAN } from '../types';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
@@ -35,7 +36,11 @@ export function VLANs() {
 
   async function loadVLANs() {
     try {
-      const { data } = await api.get('/vlans');
+      const { data, error } = await supabase
+        .from('vlans')
+        .select('*');
+
+      if (error) throw error;
       if (data) setVlans(data);
     } catch (error) {
       console.error('Error loading VLANs:', error);
@@ -136,6 +141,8 @@ export function VLANs() {
     resetForm();
   }
 
+  const userCanManage = user ? canManage(user.role) : false;
+
   const typeColors: Record<string, 'success' | 'info' | 'warning' | 'default'> = {
     PPPOE: 'success',
     MANAGEMENT: 'info',
@@ -163,7 +170,7 @@ export function VLANs() {
           <h1 className="text-3xl font-semibold text-gray-900 dark:text-gray-100">VLAN Registry</h1>
           <p className="text-gray-600 dark:text-gray-400 mt-1">Registro de VLANs da rede</p>
         </div>
-        {canManage(user!.role) && (
+        {userCanManage && (
           <Button onClick={() => setShowModal(true)}>
             <Plus className="w-4 h-4 mr-2" />
             Nova VLAN
@@ -186,7 +193,7 @@ export function VLANs() {
 
             <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">Escopo: {vlan.scope}</p>
 
-            {canManage(user!.role) && (
+            {userCanManage && (
               <div className="flex gap-2 pt-3 border-t dark:border-gray-700">
                 <Button
                   variant="secondary"

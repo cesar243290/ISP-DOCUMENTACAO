@@ -1,7 +1,15 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { auth, getAuthToken } from '../lib/api';
-import { User } from '../types';
+import { supabase } from '../lib/supabase';
+import { User as SupabaseUser } from '@supabase/supabase-js';
+
+interface User {
+  id: string;
+  email: string;
+  full_name?: string;
+  role: 'ADMIN' | 'NOC' | 'VIEWER';
+  is_active: boolean;
+}
 
 interface AuthContextType {
   user: User | null;
@@ -19,41 +27,73 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     checkSession();
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session?.user) {
+        loadUserProfile(session.user.id);
+      } else {
+        setUser(null);
+      }
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
   }, []);
 
   async function checkSession() {
     try {
-      const token = getAuthToken();
-      if (!token) {
-        setLoading(false);
-        return;
-      }
+      const { data: { session } } = await supabase.auth.getSession();
 
-      const userData = await auth.getCurrentUser();
-      if (userData) {
-        setUser(userData);
+      if (session?.user) {
+        await loadUserProfile(session.user.id);
       }
     } catch (error) {
       console.error('Session check error:', error);
-      auth.logout();
     } finally {
       setLoading(false);
     }
   }
 
+  async function loadUserProfile(userId: string) {
+    try {
+      const { data, error } = await supabase
+        .from('users')
+        .select('id, email, full_name, role, is_active')
+        .eq('id', userId)
+        .single();
+
+      if (error) throw error;
+
+      if (data) {
+        setUser(data as User);
+      }
+    } catch (error) {
+      console.error('Error loading user profile:', error);
+    }
+  }
+
   async function login(email: string, password: string) {
     try {
-      const response = await auth.login(email, password);
-      setUser(response.user);
-      navigate('/dashboard');
-    } catch (error) {
-      throw error;
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+
+      if (error) throw error;
+
+      if (data.user) {
+        await loadUserProfile(data.user.id);
+        navigate('/dashboard');
+      }
+    } catch (error: any) {
+      throw new Error(error.message || 'Login failed');
     }
   }
 
   async function logout() {
     try {
-      auth.logout();
+      await supabase.auth.signOut();
       setUser(null);
       navigate('/login');
     } catch (error) {

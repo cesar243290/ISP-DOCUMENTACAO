@@ -1,8 +1,11 @@
 [build]
-command = "npx vite build"
-publish = "dist"
+  command = "npm run build"
+  publish = "dist"
 
 [[redirects]]
-from = "/*"
-to = "/index.html"
-status = 200
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
+[build.environment]
+  NODE_VERSION = "18"

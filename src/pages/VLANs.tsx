@@ -9,7 +9,7 @@ import { Modal } from '../components/ui/Modal';
 import { Badge } from '../components/ui/Badge';
 import { useToast } from '../components/ui/Toast';
 import { useAuth } from '../contexts/AuthContext';
-import { Plus, Activity, Edit2, Trash2 } from 'lucide-react';
+import { Plus, Activity, CreditCard as Edit2, Trash2 } from 'lucide-react';
 
 export function VLANs() {
   const { user } = useAuth();

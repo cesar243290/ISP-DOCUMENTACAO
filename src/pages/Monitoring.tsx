@@ -8,7 +8,7 @@ import { Select } from '../components/ui/Select';
 import { Modal } from '../components/ui/Modal';
 import { useToast } from '../components/ui/Toast';
 import { useAuth } from '../contexts/AuthContext';
-import { Activity, Plus, Edit2, Trash2, Radio, Server, RefreshCw } from 'lucide-react';
+import { Activity, Plus, CreditCard as Edit2, Trash2, Radio, Server, RefreshCw } from 'lucide-react';
 
 interface MonitorConfig {
   id: string;

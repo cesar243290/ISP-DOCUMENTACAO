@@ -5,7 +5,7 @@ import { Button } from './ui/Button';
 import { Input } from './ui/Input';
 import { useToast } from './ui/Toast';
 import { useAuth } from '../contexts/AuthContext';
-import { Key, Eye, EyeOff, Plus, Edit2, Trash2 } from 'lucide-react';
+import { Key, Eye, EyeOff, Plus, CreditCard as Edit2, Trash2 } from 'lucide-react';
 
 interface Credential {
   id: string;

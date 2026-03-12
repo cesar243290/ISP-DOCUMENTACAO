@@ -7,7 +7,7 @@ import { Input } from '../components/ui/Input';
 import { Modal } from '../components/ui/Modal';
 import { useToast } from '../components/ui/Toast';
 import { useAuth } from '../contexts/AuthContext';
-import { CheckSquare, Plus, Edit2, Trash2 } from 'lucide-react';
+import { CheckSquare, Plus, CreditCard as Edit2, Trash2 } from 'lucide-react';
 
 export function Checklists() {
   const { user } = useAuth();

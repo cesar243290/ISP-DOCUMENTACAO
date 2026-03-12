@@ -7,7 +7,7 @@ import { Input } from '../components/ui/Input';
 import { Modal } from '../components/ui/Modal';
 import { useToast } from '../components/ui/Toast';
 import { useAuth } from '../contexts/AuthContext';
-import { Plus, MapPin, Edit2, Trash2 } from 'lucide-react';
+import { Plus, MapPin, CreditCard as Edit2, Trash2 } from 'lucide-react';
 
 export function POPs() {
   const { user } = useAuth();

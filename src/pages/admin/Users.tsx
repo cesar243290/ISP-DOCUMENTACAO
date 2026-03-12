@@ -9,7 +9,7 @@ import { Input } from '../../components/ui/Input';
 import { Select } from '../../components/ui/Select';
 import { useToast } from '../../components/ui/Toast';
 import { useAuth } from '../../contexts/AuthContext';
-import { Plus, Users as UsersIcon, Trash2, Edit2, Key } from 'lucide-react';
+import { Plus, Users as UsersIcon, Trash2, CreditCard as Edit2, Key } from 'lucide-react';
 
 export function Users() {
   const { user: currentUser } = useAuth();

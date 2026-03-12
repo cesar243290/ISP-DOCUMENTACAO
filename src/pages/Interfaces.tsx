@@ -8,7 +8,7 @@ import { Modal } from '../components/ui/Modal';
 import { Select } from '../components/ui/Select';
 import { useToast } from '../components/ui/Toast';
 import { useAuth } from '../contexts/AuthContext';
-import { Network, Search, Plus, Edit2, Trash2, Link, Cable } from 'lucide-react';
+import { Network, Search, Plus, CreditCard as Edit2, Trash2, Link, Cable } from 'lucide-react';
 
 export function Interfaces() {
   const { user } = useAuth();

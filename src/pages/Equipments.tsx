@@ -10,7 +10,7 @@ import { Select } from '../components/ui/Select';
 import { useToast } from '../components/ui/Toast';
 import { useAuth } from '../contexts/AuthContext';
 import { EquipmentCredentials } from '../components/EquipmentCredentials';
-import { Plus, Server, Search, Edit2, Trash2, Key } from 'lucide-react';
+import { Plus, Server, Search, CreditCard as Edit2, Trash2, Key } from 'lucide-react';
 
 export function Equipments() {
   const { user } = useAuth();

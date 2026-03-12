@@ -1,9 +1,7 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { supabase } from '../lib/supabase';
+import { auth, getAuthToken } from '../lib/api';
 import { User } from '../types';
-import { verifyPassword } from '../lib/auth';
-import { logAudit } from '../lib/audit';
 
 interface AuthContextType {
   user: User | null;
@@ -25,35 +23,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   async function checkSession() {
     try {
-      const sessionToken = localStorage.getItem('session_token');
-      if (!sessionToken) {
+      const token = getAuthToken();
+      if (!token) {
         setLoading(false);
         return;
       }
 
-      const { data: session } = await supabase
-        .from('sessions')
-        .select('user_id, expires_at')
-        .eq('token', sessionToken)
-        .single();
-
-      if (!session || new Date(session.expires_at) < new Date()) {
-        localStorage.removeItem('session_token');
-        setLoading(false);
-        return;
-      }
-
-      const { data: userData } = await supabase
-        .from('users')
-        .select('*')
-        .eq('id', session.user_id)
-        .single();
-
-      if (userData && userData.is_active) {
+      const userData = await auth.getCurrentUser();
+      if (userData) {
         setUser(userData);
       }
     } catch (error) {
       console.error('Session check error:', error);
+      auth.logout();
     } finally {
       setLoading(false);
     }
@@ -61,58 +43,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   async function login(email: string, password: string) {
     try {
-      const { data: userData, error } = await supabase
-        .from('users')
-        .select('*')
-        .eq('email', email)
-        .eq('is_active', true)
-        .maybeSingle();
-
-      if (error || !userData) {
-        await logAudit({
-          action: 'LOGIN_FAILED',
-          entity_type: 'user',
-          after_data: { email }
-        });
-        throw new Error('Credenciais inválidas');
-      }
-
-      const isValid = await verifyPassword(password, userData.password_hash);
-
-      if (!isValid) {
-        await logAudit({
-          user_id: userData.id,
-          action: 'LOGIN_FAILED',
-          entity_type: 'user',
-          entity_id: userData.id
-        });
-        throw new Error('Credenciais inválidas');
-      }
-
-      const sessionToken = crypto.randomUUID();
-      const expiresAt = new Date();
-      expiresAt.setHours(expiresAt.getHours() + 8);
-
-      await supabase.from('sessions').insert({
-        user_id: userData.id,
-        token: sessionToken,
-        expires_at: expiresAt.toISOString()
-      });
-
-      await supabase
-        .from('users')
-        .update({ last_login: new Date().toISOString() })
-        .eq('id', userData.id);
-
-      await logAudit({
-        user_id: userData.id,
-        action: 'LOGIN_SUCCESS',
-        entity_type: 'user',
-        entity_id: userData.id
-      });
-
-      localStorage.setItem('session_token', sessionToken);
-      setUser(userData);
+      const response = await auth.login(email, password);
+      setUser(response.user);
       navigate('/dashboard');
     } catch (error) {
       throw error;
@@ -121,21 +53,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   async function logout() {
     try {
-      const sessionToken = localStorage.getItem('session_token');
-      if (sessionToken) {
-        await supabase.from('sessions').delete().eq('token', sessionToken);
-      }
-
-      if (user) {
-        await logAudit({
-          user_id: user.id,
-          action: 'LOGOUT',
-          entity_type: 'user',
-          entity_id: user.id
-        });
-      }
-
-      localStorage.removeItem('session_token');
+      auth.logout();
       setUser(null);
       navigate('/login');
     } catch (error) {

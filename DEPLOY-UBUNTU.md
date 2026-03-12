@@ -1,355 +1,386 @@
-# Deploy no Ubuntu Server - Guia Completo
+# Deploy no Ubuntu Server com MySQL/MariaDB
 
-Este guia mostra como fazer o deploy do ISP NOC Manager em um servidor Ubuntu.
+Este guia mostra como fazer o deploy completo da aplicação em um Ubuntu Server usando MySQL ou MariaDB.
 
 ## Pré-requisitos
 
 - Ubuntu Server 20.04 ou superior
 - Acesso root ou sudo
-- Domínio apontando para o IP do servidor (para SSL)
-- Conta Supabase configurada
+- Domínio (opcional, mas recomendado)
 
-## Passo 1: Atualizar o Sistema
+## 1. Instalação do MySQL/MariaDB
+
+### Opção A: MySQL
 
 ```bash
 sudo apt update
-sudo apt upgrade -y
+sudo apt install mysql-server -y
+sudo mysql_secure_installation
 ```
 
-## Passo 2: Instalar Node.js e NPM
+### Opção B: MariaDB (Recomendado)
 
 ```bash
-# Instalar Node.js 20.x
-curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
-sudo apt install -y nodejs
+sudo apt update
+sudo apt install mariadb-server -y
+sudo mysql_secure_installation
+```
 
-# Verificar instalação
+### Configurar o banco de dados
+
+```bash
+sudo mysql
+
+# Dentro do MySQL/MariaDB:
+CREATE DATABASE network_manager CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE USER 'netmanager'@'localhost' IDENTIFIED BY 'sua_senha_forte_aqui';
+GRANT ALL PRIVILEGES ON network_manager.* TO 'netmanager'@'localhost';
+FLUSH PRIVILEGES;
+EXIT;
+```
+
+### Importar o schema
+
+```bash
+mysql -u netmanager -p network_manager < /caminho/do/projeto/server/database/schema.sql
+```
+
+## 2. Instalação do Node.js
+
+```bash
+curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+sudo apt install nodejs -y
 node --version
 npm --version
 ```
 
-## Passo 3: Instalar Nginx
+## 3. Instalação do Nginx
 
 ```bash
-sudo apt install -y nginx
-sudo systemctl enable nginx
+sudo apt install nginx -y
 sudo systemctl start nginx
+sudo systemctl enable nginx
 ```
 
-## Passo 4: Clonar o Projeto
+## 4. Configuração do Projeto
+
+### Copiar arquivos para o servidor
 
 ```bash
-# Criar diretório para o projeto
-sudo mkdir -p /var/www/isp-noc
-cd /var/www/isp-noc
+# No seu computador local:
+scp -r seu-projeto/ usuario@seu-servidor:/var/www/network-manager/
 
-# Se você tem o projeto em um repositório Git:
-# git clone https://seu-repositorio.git .
-
-# Caso contrário, transfira os arquivos via SCP:
-# No seu computador local, execute:
-# scp -r /caminho/do/projeto/* usuario@servidor:/var/www/isp-noc/
+# Ou use git:
+cd /var/www
+sudo git clone seu-repositorio network-manager
+cd network-manager
 ```
 
-## Passo 5: Configurar Variáveis de Ambiente
+### Instalar dependências do backend
 
 ```bash
-cd /var/www/isp-noc
-
-# Criar arquivo .env
-sudo nano .env
+cd /var/www/network-manager/server
+npm install
 ```
 
-Adicione as seguintes variáveis (substitua pelos seus valores do Supabase):
+### Configurar variáveis de ambiente do backend
+
+```bash
+cd /var/www/network-manager/server
+cp .env.example .env
+nano .env
+```
+
+Configure com seus valores:
 
 ```env
-VITE_SUPABASE_URL=https://seu-projeto.supabase.co
-VITE_SUPABASE_ANON_KEY=sua-chave-anonima
+PORT=3001
+DB_HOST=localhost
+DB_PORT=3306
+DB_USER=netmanager
+DB_PASSWORD=sua_senha_forte_aqui
+DB_NAME=network_manager
+JWT_SECRET=gere_uma_chave_secreta_forte_aqui
+ENCRYPTION_KEY=gere_uma_chave_de_32_caracteres_aqui
 ```
 
-**IMPORTANTE**: Obtenha essas credenciais em:
-1. Acesse https://supabase.com/dashboard
-2. Selecione seu projeto
-3. Vá em Settings > API
-4. Copie a URL e a anon/public key
-
-## Passo 6: Instalar Dependências e Fazer Build
+Para gerar chaves seguras:
 
 ```bash
-cd /var/www/isp-noc
+# JWT Secret
+openssl rand -base64 32
 
-# Instalar dependências
-sudo npm install
-
-# Fazer build do projeto
-sudo npm run build
+# Encryption Key
+openssl rand -base64 32
 ```
 
-Isso criará uma pasta `dist` com os arquivos estáticos otimizados para produção.
-
-## Passo 7: Configurar Nginx
+### Instalar dependências do frontend
 
 ```bash
-# Criar configuração do site
-sudo nano /etc/nginx/sites-available/isp-noc
+cd /var/www/network-manager
+npm install
 ```
 
-Adicione a seguinte configuração:
+### Configurar variáveis de ambiente do frontend
+
+```bash
+nano .env
+```
+
+Configure:
+
+```env
+VITE_API_URL=http://seu-dominio.com/api
+```
+
+Se estiver usando apenas IP:
+
+```env
+VITE_API_URL=http://SEU_IP:3001/api
+```
+
+### Build do frontend
+
+```bash
+cd /var/www/network-manager
+npm run build
+```
+
+## 5. Configurar PM2 para o Backend
+
+PM2 mantém o backend rodando continuamente:
+
+```bash
+sudo npm install -g pm2
+cd /var/www/network-manager/server
+pm2 start server.js --name network-manager-api
+pm2 save
+pm2 startup
+```
+
+Verificar status:
+
+```bash
+pm2 status
+pm2 logs network-manager-api
+```
+
+## 6. Configurar Nginx
+
+### Criar arquivo de configuração
+
+```bash
+sudo nano /etc/nginx/sites-available/network-manager
+```
+
+Cole esta configuração:
 
 ```nginx
 server {
     listen 80;
-    server_name seu-dominio.com www.seu-dominio.com;
+    server_name seu-dominio.com;
 
-    root /var/www/isp-noc/dist;
-    index index.html;
-
-    # Compression
-    gzip on;
-    gzip_vary on;
-    gzip_min_length 1024;
-    gzip_types text/plain text/css text/xml text/javascript application/x-javascript application/xml+rss application/javascript application/json;
-
-    # Security headers
-    add_header X-Frame-Options "SAMEORIGIN" always;
-    add_header X-Content-Type-Options "nosniff" always;
-    add_header X-XSS-Protection "1; mode=block" always;
-    add_header Referrer-Policy "no-referrer-when-downgrade" always;
-
+    # Frontend
     location / {
+        root /var/www/network-manager/dist;
         try_files $uri $uri/ /index.html;
     }
 
-    # Cache static assets
-    location ~* \.(jpg|jpeg|png|gif|ico|css|js|svg|woff|woff2|ttf|eot)$ {
-        expires 1y;
-        add_header Cache-Control "public, immutable";
-    }
-
-    # Disable access to hidden files
-    location ~ /\. {
-        deny all;
+    # Backend API
+    location /api {
+        proxy_pass http://localhost:3001;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_cache_bypass $http_upgrade;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
     }
 }
 ```
 
-**Substitua** `seu-dominio.com` pelo seu domínio real.
-
-Ativar o site:
+### Ativar o site
 
 ```bash
-# Criar link simbólico
-sudo ln -s /etc/nginx/sites-available/isp-noc /etc/nginx/sites-enabled/
-
-# Remover site padrão
-sudo rm /etc/nginx/sites-enabled/default
-
-# Testar configuração
+sudo ln -s /etc/nginx/sites-available/network-manager /etc/nginx/sites-enabled/
 sudo nginx -t
-
-# Recarregar Nginx
 sudo systemctl reload nginx
 ```
 
-## Passo 8: Configurar Firewall
+## 7. Configurar Firewall
 
 ```bash
-# Permitir SSH, HTTP e HTTPS
+sudo ufw allow 'Nginx Full'
 sudo ufw allow OpenSSH
+sudo ufw enable
+```
+
+## 8. Configurar SSL com Let's Encrypt (Recomendado)
+
+```bash
+sudo apt install certbot python3-certbot-nginx -y
+sudo certbot --nginx -d seu-dominio.com
+```
+
+O Certbot vai automaticamente configurar HTTPS.
+
+## 9. Criar Usuário Admin
+
+Execute o schema SQL que já inclui o usuário admin padrão.
+
+**Login padrão**:
+- Email: admin@example.com
+- Senha: admin123
+
+**IMPORTANTE**: Troque a senha no primeiro login!
+
+## 10. Verificação Final
+
+### Testar o backend
+
+```bash
+curl http://localhost:3001/health
+```
+
+Deve retornar: `{"status":"ok","timestamp":"..."}`
+
+### Testar o frontend
+
+Abra no navegador: `http://seu-dominio.com` ou `http://SEU_IP`
+
+### Verificar logs
+
+```bash
+# Logs do backend
+pm2 logs network-manager-api
+
+# Logs do Nginx
+sudo tail -f /var/log/nginx/error.log
+sudo tail -f /var/log/nginx/access.log
+
+# Logs do MySQL
+sudo tail -f /var/log/mysql/error.log
+```
+
+## 11. Manutenção
+
+### Atualizar a aplicação
+
+```bash
+cd /var/www/network-manager
+git pull
+npm install
+npm run build
+cd server
+npm install
+pm2 restart network-manager-api
+```
+
+### Backup do banco de dados
+
+```bash
+mysqldump -u netmanager -p network_manager > backup_$(date +%Y%m%d).sql
+```
+
+### Restaurar backup
+
+```bash
+mysql -u netmanager -p network_manager < backup_20260312.sql
+```
+
+### Reiniciar serviços
+
+```bash
+pm2 restart network-manager-api
+sudo systemctl restart nginx
+sudo systemctl restart mysql
+```
+
+## 12. Troubleshooting
+
+### Backend não inicia
+
+```bash
+pm2 logs network-manager-api
+```
+
+### Erro de conexão com banco
+
+```bash
+mysql -u netmanager -p network_manager
+sudo systemctl status mysql
+```
+
+### Frontend não carrega
+
+```bash
+ls -la /var/www/network-manager/dist
+sudo chown -R www-data:www-data /var/www/network-manager/dist
+```
+
+### Erro 502 Bad Gateway
+
+```bash
+pm2 status
+curl http://localhost:3001/health
+pm2 restart network-manager-api
+```
+
+## Segurança Adicional
+
+### Firewall avançado
+
+```bash
+sudo ufw default deny incoming
+sudo ufw default allow outgoing
+sudo ufw allow ssh
 sudo ufw allow 'Nginx Full'
 sudo ufw enable
 ```
 
-## Passo 9: Instalar SSL com Let's Encrypt (Recomendado)
+### Fail2ban para proteção
 
 ```bash
-# Instalar Certbot
-sudo apt install -y certbot python3-certbot-nginx
-
-# Obter certificado SSL
-sudo certbot --nginx -d seu-dominio.com -d www.seu-dominio.com
-
-# Certificado será renovado automaticamente
-# Testar renovação automática:
-sudo certbot renew --dry-run
-```
-
-Certbot configurará automaticamente o SSL no Nginx.
-
-## Passo 10: Configurar Permissões
-
-```bash
-# Dar permissões corretas
-sudo chown -R www-data:www-data /var/www/isp-noc
-sudo chmod -R 755 /var/www/isp-noc
-```
-
-## Passo 11: Testar a Aplicação
-
-Abra seu navegador e acesse:
-- HTTP: `http://seu-dominio.com`
-- HTTPS: `https://seu-dominio.com` (se configurou SSL)
-
-Faça login com as credenciais:
-- **Email**: admin@ispnoc.local
-- **Senha**: Admin@123
-
-**IMPORTANTE**: Altere a senha padrão imediatamente após o primeiro login!
-
-## Atualização da Aplicação
-
-Quando precisar atualizar o código:
-
-```bash
-cd /var/www/isp-noc
-
-# Fazer backup do .env
-cp .env .env.backup
-
-# Atualizar código (se usar Git)
-# git pull origin main
-
-# Reinstalar dependências (se necessário)
-sudo npm install
-
-# Fazer novo build
-sudo npm run build
-
-# Restaurar .env se necessário
-cp .env.backup .env
-
-# Recarregar Nginx
-sudo systemctl reload nginx
-```
-
-## Monitoramento de Logs
-
-```bash
-# Logs do Nginx - Acesso
-sudo tail -f /var/log/nginx/access.log
-
-# Logs do Nginx - Erros
-sudo tail -f /var/log/nginx/error.log
-
-# Verificar status do Nginx
-sudo systemctl status nginx
-```
-
-## Troubleshooting
-
-### Erro 502 Bad Gateway
-```bash
-sudo systemctl restart nginx
-sudo nginx -t
-```
-
-### Erro 403 Forbidden
-```bash
-sudo chown -R www-data:www-data /var/www/isp-noc
-sudo chmod -R 755 /var/www/isp-noc
-```
-
-### Páginas em branco ou erro ao carregar
-- Verifique se o arquivo `.env` está configurado corretamente
-- Verifique se as credenciais do Supabase estão corretas
-- Abra o Console do navegador (F12) para ver erros JavaScript
-
-### Build falha
-```bash
-# Limpar cache do npm
-sudo npm cache clean --force
-
-# Remover node_modules e reinstalar
-sudo rm -rf node_modules package-lock.json
-sudo npm install
-sudo npm run build
-```
-
-## Segurança Adicional (Recomendado)
-
-### 1. Instalar Fail2Ban (proteção contra brute force)
-
-```bash
-sudo apt install -y fail2ban
-sudo systemctl enable fail2ban
+sudo apt install fail2ban -y
 sudo systemctl start fail2ban
+sudo systemctl enable fail2ban
 ```
 
-### 2. Configurar atualizações automáticas
+### Atualizações automáticas
 
 ```bash
-sudo apt install -y unattended-upgrades
+sudo apt install unattended-upgrades -y
 sudo dpkg-reconfigure --priority=low unattended-upgrades
 ```
 
-### 3. Desabilitar login root via SSH
+## Performance
 
-```bash
-sudo nano /etc/ssh/sshd_config
-# Altere: PermitRootLogin no
-sudo systemctl restart sshd
+### Otimizar MySQL
+
+Edite `/etc/mysql/mysql.conf.d/mysqld.cnf`:
+
+```ini
+[mysqld]
+max_connections = 100
+innodb_buffer_pool_size = 256M
+innodb_log_file_size = 64M
+query_cache_size = 16M
 ```
 
-## Backup
-
-É importante fazer backup regularmente:
-
 ```bash
-# Criar script de backup
-sudo nano /usr/local/bin/backup-isp-noc.sh
+sudo systemctl restart mysql
 ```
 
-Adicione:
+### Cache do Nginx
 
-```bash
-#!/bin/bash
-BACKUP_DIR="/var/backups/isp-noc"
-DATE=$(date +%Y%m%d-%H%M%S)
-
-mkdir -p $BACKUP_DIR
-
-# Backup dos arquivos
-tar -czf $BACKUP_DIR/isp-noc-$DATE.tar.gz /var/www/isp-noc
-
-# Manter apenas últimos 7 backups
-find $BACKUP_DIR -name "isp-noc-*.tar.gz" -mtime +7 -delete
-
-echo "Backup concluído: $BACKUP_DIR/isp-noc-$DATE.tar.gz"
+```nginx
+location ~* \.(jpg|jpeg|png|gif|ico|css|js)$ {
+    expires 1y;
+    add_header Cache-Control "public, immutable";
+}
 ```
-
-Tornar executável e agendar:
-
-```bash
-sudo chmod +x /usr/local/bin/backup-isp-noc.sh
-
-# Agendar backup diário às 2h da manhã
-sudo crontab -e
-# Adicione a linha:
-# 0 2 * * * /usr/local/bin/backup-isp-noc.sh
-```
-
-## Suporte
-
-Para problemas com:
-- **Supabase**: Verifique o dashboard em https://supabase.com/dashboard
-- **Nginx**: `sudo nginx -t` para verificar erros de configuração
-- **Aplicação**: Verifique o Console do navegador (F12)
-
-## Checklist Final
-
-- [ ] Node.js instalado (versão 20.x ou superior)
-- [ ] Nginx instalado e rodando
-- [ ] Projeto em `/var/www/isp-noc`
-- [ ] Arquivo `.env` configurado com credenciais do Supabase
-- [ ] Build executado com sucesso (`npm run build`)
-- [ ] Configuração do Nginx criada e ativada
-- [ ] Firewall configurado (portas 22, 80, 443)
-- [ ] SSL configurado com Let's Encrypt
-- [ ] Permissões corretas (www-data)
-- [ ] Site acessível pelo navegador
-- [ ] Login funcionando
-- [ ] Senha padrão alterada
 
 ---
 
-**Pronto!** Seu ISP NOC Manager está rodando em produção no Ubuntu Server.
+**Sistema rodando no Ubuntu Server com MySQL/MariaDB!**

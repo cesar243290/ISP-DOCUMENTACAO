@@ -9,7 +9,7 @@ import { Server, Moon, Sun } from 'lucide-react';
 export function Login() {
   const { login } = useAuth();
   const { theme, toggleTheme } = useTheme();
-  const [email, setEmail] = useState('');
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const { showToast, ToastContainer } = useToast();
@@ -19,7 +19,7 @@ export function Login() {
     setLoading(true);
 
     try {
-      await login(email, password);
+      await login(username, password);
     } catch (error: any) {
       showToast(error.message || 'Erro ao fazer login', 'error');
     } finally {
@@ -59,11 +59,11 @@ export function Login() {
 
           <form onSubmit={handleSubmit} className="space-y-5">
             <Input
-              type="email"
-              label="Email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="seu@email.com"
+              type="text"
+              label="Usuário ou Email"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              placeholder="usuario@email.com"
               required
               autoFocus
             />

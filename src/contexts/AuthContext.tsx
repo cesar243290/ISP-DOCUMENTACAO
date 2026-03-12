@@ -1,7 +1,6 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
-import { User as SupabaseUser } from '@supabase/supabase-js';
 
 interface User {
   id: string;
@@ -14,7 +13,7 @@ interface User {
 interface AuthContextType {
   user: User | null;
   loading: boolean;
-  login: (email: string, password: string) => Promise<void>;
+  login: (username: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
 }
 
@@ -27,29 +26,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     checkSession();
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session?.user) {
-        loadUserProfile(session.user.id);
-      } else {
-        setUser(null);
-      }
-    });
-
-    return () => {
-      subscription.unsubscribe();
-    };
   }, []);
 
   async function checkSession() {
     try {
-      const { data: { session } } = await supabase.auth.getSession();
+      const token = localStorage.getItem('session_token');
+      if (token) {
+        const { data: session } = await supabase
+          .from('sessions')
+          .select('user_id')
+          .eq('token', token)
+          .gt('expires_at', new Date().toISOString())
+          .maybeSingle();
 
-      if (session?.user) {
-        await loadUserProfile(session.user.id);
+        if (session?.user_id) {
+          await loadUserProfile(session.user_id);
+        } else {
+          localStorage.removeItem('session_token');
+        }
       }
     } catch (error) {
       console.error('Session check error:', error);
+      localStorage.removeItem('session_token');
     } finally {
       setLoading(false);
     }
@@ -61,7 +59,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         .from('users')
         .select('id, email, full_name, role, is_active')
         .eq('id', userId)
-        .single();
+        .eq('is_active', true)
+        .maybeSingle();
 
       if (error) throw error;
 
@@ -73,31 +72,84 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }
 
-  async function login(email: string, password: string) {
+  async function login(username: string, password: string) {
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
+      const { data: userData, error: userError } = await supabase
+        .from('users')
+        .select('id, email, username, password_hash, role, is_active, full_name')
+        .or(`username.eq.${username},email.eq.${username}`)
+        .eq('is_active', true)
+        .maybeSingle();
+
+      if (userError || !userData) {
+        throw new Error('Usuário ou senha inválidos');
+      }
+
+      const encoder = new TextEncoder();
+      const data = encoder.encode(password);
+      const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+      const hashArray = Array.from(new Uint8Array(hashBuffer));
+      const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+
+      if (hashHex !== userData.password_hash) {
+        throw new Error('Usuário ou senha inválidos');
+      }
+
+      const token = crypto.randomUUID();
+      const expiresAt = new Date();
+      expiresAt.setHours(expiresAt.getHours() + 24);
+
+      const { error: sessionError } = await supabase
+        .from('sessions')
+        .insert({
+          user_id: userData.id,
+          token: token,
+          expires_at: expiresAt.toISOString(),
+          ip_address: null,
+          user_agent: navigator.userAgent
+        });
+
+      if (sessionError) throw sessionError;
+
+      await supabase
+        .from('users')
+        .update({ last_login: new Date().toISOString() })
+        .eq('id', userData.id);
+
+      localStorage.setItem('session_token', token);
+
+      setUser({
+        id: userData.id,
+        email: userData.email,
+        full_name: userData.full_name,
+        role: userData.role,
+        is_active: userData.is_active
       });
 
-      if (error) throw error;
-
-      if (data.user) {
-        await loadUserProfile(data.user.id);
-        navigate('/dashboard');
-      }
+      navigate('/dashboard');
     } catch (error: any) {
-      throw new Error(error.message || 'Login failed');
+      throw new Error(error.message || 'Falha no login');
     }
   }
 
   async function logout() {
     try {
-      await supabase.auth.signOut();
+      const token = localStorage.getItem('session_token');
+      if (token) {
+        await supabase
+          .from('sessions')
+          .delete()
+          .eq('token', token);
+      }
+
+      localStorage.removeItem('session_token');
       setUser(null);
       navigate('/login');
     } catch (error) {
       console.error('Logout error:', error);
+      localStorage.removeItem('session_token');
+      setUser(null);
+      navigate('/login');
     }
   }
 

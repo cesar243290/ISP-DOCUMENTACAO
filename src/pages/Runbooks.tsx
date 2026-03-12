@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { supabase } from '../lib/supabase';
+import { api } from '../lib/api';
 import { Card } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
@@ -8,8 +8,6 @@ import { Select } from '../components/ui/Select';
 import { Modal } from '../components/ui/Modal';
 import { useToast } from '../components/ui/Toast';
 import { useAuth } from '../contexts/AuthContext';
-import { canManage } from '../lib/auth';
-import { logAudit } from '../lib/audit';
 import { FileText, Plus, Edit2, Trash2 } from 'lucide-react';
 
 export function Runbooks() {
@@ -35,7 +33,7 @@ export function Runbooks() {
 
   async function loadRunbooks() {
     try {
-      const { data } = await supabase.from('runbooks').select('*').order('title');
+      const { data } = await api.get('/runbooks');
       if (data) setRunbooks(data);
     } catch (error) {
       console.error('Error loading runbooks:', error);
@@ -64,13 +62,6 @@ export function Runbooks() {
 
         if (error) throw error;
 
-        await logAudit({
-          user_id: user?.id,
-          action: 'UPDATE',
-          entity_type: 'runbook',
-          entity_id: data.id,
-          after_data: data
-        });
 
         showToast('Runbook atualizado com sucesso', 'success');
       } else {
@@ -82,13 +73,6 @@ export function Runbooks() {
 
         if (error) throw error;
 
-        await logAudit({
-          user_id: user?.id,
-          action: 'CREATE',
-          entity_type: 'runbook',
-          entity_id: data.id,
-          after_data: data
-        });
 
         showToast('Runbook criado com sucesso', 'success');
       }
@@ -134,12 +118,6 @@ export function Runbooks() {
 
       if (error) throw error;
 
-      await logAudit({
-        user_id: user?.id,
-        action: 'DELETE',
-        entity_type: 'runbook',
-        entity_id: id
-      });
 
       showToast('Runbook excluído com sucesso', 'success');
       setDeleteConfirm(null);

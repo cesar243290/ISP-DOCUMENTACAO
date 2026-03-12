@@ -1,8 +1,7 @@
 import { useEffect, useState } from 'react';
+import { api } from '../lib/api';
 import { Bell, AlertCircle, Clock, Check } from 'lucide-react';
-import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
-import { logAudit } from '../lib/audit';
 
 interface DownHost {
   id: string;
@@ -86,17 +85,6 @@ export function NotificationBell() {
 
       if (error) throw error;
 
-      await logAudit({
-        user_id: user.id,
-        action: 'ACKNOWLEDGE',
-        entity_type: 'monitoring_alert',
-        entity_id: hostId,
-        after_data: {
-          host_name: hostName,
-          target: target,
-          acknowledged_at: new Date().toISOString()
-        }
-      });
 
       await loadDownHosts();
     } catch (error: any) {

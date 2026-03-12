@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { supabase } from '../lib/supabase';
+import { api } from '../lib/api';
 import { Equipment, POP } from '../types';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
@@ -9,8 +9,6 @@ import { Modal } from '../components/ui/Modal';
 import { Select } from '../components/ui/Select';
 import { useToast } from '../components/ui/Toast';
 import { useAuth } from '../contexts/AuthContext';
-import { canManage } from '../lib/auth';
-import { logAudit } from '../lib/audit';
 import { EquipmentCredentials } from '../components/EquipmentCredentials';
 import { Plus, Server, Search, Edit2, Trash2, Key } from 'lucide-react';
 
@@ -49,12 +47,12 @@ export function Equipments() {
   async function loadData() {
     try {
       const [equipmentData, popData] = await Promise.all([
-        supabase.from('equipment').select('*').order('hostname'),
-        supabase.from('pops').select('*').order('name')
+        api.get('/equipment'),
+        api.get('/pops')
       ]);
 
-      if (equipmentData.data) setEquipments(equipmentData.data);
-      if (popData.data) setPops(popData.data);
+      if (equipmentData) setEquipments(equipmentData);
+      if (popData) setPops(popData);
     } catch (error) {
       console.error('Error loading data:', error);
       showToast('Erro ao carregar dados', 'error');
@@ -82,13 +80,6 @@ export function Equipments() {
 
         if (error) throw error;
 
-        await logAudit({
-          user_id: user?.id,
-          action: 'UPDATE',
-          entity_type: 'equipment',
-          entity_id: data.id,
-          after_data: data
-        });
 
         showToast('Equipamento atualizado com sucesso', 'success');
       } else {
@@ -100,13 +91,6 @@ export function Equipments() {
 
         if (error) throw error;
 
-        await logAudit({
-          user_id: user?.id,
-          action: 'CREATE',
-          entity_type: 'equipment',
-          entity_id: data.id,
-          after_data: data
-        });
 
         showToast('Equipamento criado com sucesso', 'success');
       }
@@ -162,12 +146,6 @@ export function Equipments() {
 
       if (error) throw error;
 
-      await logAudit({
-        user_id: user?.id,
-        action: 'DELETE',
-        entity_type: 'equipment',
-        entity_id: id
-      });
 
       showToast('Equipamento excluído com sucesso', 'success');
       setDeleteConfirm(null);

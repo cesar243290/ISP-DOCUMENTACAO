@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { supabase } from '../lib/supabase';
+import { api } from '../lib/api';
 import { Card } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
@@ -8,8 +8,6 @@ import { Select } from '../components/ui/Select';
 import { Modal } from '../components/ui/Modal';
 import { useToast } from '../components/ui/Toast';
 import { useAuth } from '../contexts/AuthContext';
-import { canManage } from '../lib/auth';
-import { logAudit } from '../lib/audit';
 import { Settings, Plus, Edit2, Trash2 } from 'lucide-react';
 
 export function Services() {
@@ -82,13 +80,6 @@ export function Services() {
 
         if (error) throw error;
 
-        await logAudit({
-          user_id: user?.id,
-          action: 'UPDATE',
-          entity_type: 'service',
-          entity_id: data.id,
-          after_data: data
-        });
 
         showToast('Serviço atualizado com sucesso', 'success');
       } else {
@@ -100,13 +91,6 @@ export function Services() {
 
         if (error) throw error;
 
-        await logAudit({
-          user_id: user?.id,
-          action: 'CREATE',
-          entity_type: 'service',
-          entity_id: data.id,
-          after_data: data
-        });
 
         showToast('Serviço criado com sucesso', 'success');
       }
@@ -151,15 +135,9 @@ export function Services() {
 
   async function handleDelete(id: string) {
     try {
-      const { error } = await supabase.from('services').delete().eq('id', id);
+      const { error } = await api.delete();
       if (error) throw error;
 
-      await logAudit({
-        user_id: user?.id,
-        action: 'DELETE',
-        entity_type: 'service',
-        entity_id: id
-      });
 
       showToast('Serviço excluído com sucesso', 'success');
       loadData();

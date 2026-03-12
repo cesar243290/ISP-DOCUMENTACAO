@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { supabase } from '../lib/supabase';
+import { api } from '../lib/api';
 import { Card } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
@@ -8,8 +8,6 @@ import { Select } from '../components/ui/Select';
 import { Modal } from '../components/ui/Modal';
 import { useToast } from '../components/ui/Toast';
 import { useAuth } from '../contexts/AuthContext';
-import { canManage } from '../lib/auth';
-import { logAudit } from '../lib/audit';
 import { Activity, Plus, Edit2, Trash2, Radio, Server, RefreshCw } from 'lucide-react';
 
 interface MonitorConfig {
@@ -238,13 +236,6 @@ export function Monitoring() {
 
         if (error) throw error;
 
-        await logAudit({
-          user_id: user?.id,
-          action: 'UPDATE',
-          entity_type: 'monitoring_config',
-          entity_id: data.id,
-          after_data: data
-        });
 
         showToast('Configuração atualizada com sucesso', 'success');
       } else {
@@ -256,13 +247,6 @@ export function Monitoring() {
 
         if (error) throw error;
 
-        await logAudit({
-          user_id: user?.id,
-          action: 'CREATE',
-          entity_type: 'monitoring_config',
-          entity_id: data.id,
-          after_data: data
-        });
 
         showToast('Configuração criada com sucesso', 'success');
       }
@@ -320,12 +304,6 @@ export function Monitoring() {
 
       if (error) throw error;
 
-      await logAudit({
-        user_id: user?.id,
-        action: 'DELETE',
-        entity_type: 'monitoring_config',
-        entity_id: id
-      });
 
       showToast('Configuração excluída com sucesso', 'success');
       setDeleteConfirm(null);

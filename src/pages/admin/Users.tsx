@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { supabase } from '../../lib/supabase';
+import { api } from '../../lib/api';
 import { User } from '../../types';
 import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
@@ -9,8 +9,6 @@ import { Input } from '../../components/ui/Input';
 import { Select } from '../../components/ui/Select';
 import { useToast } from '../../components/ui/Toast';
 import { useAuth } from '../../contexts/AuthContext';
-import { hashPassword } from '../../lib/auth';
-import { logAudit } from '../../lib/audit';
 import { Plus, Users as UsersIcon, Trash2, Edit2, Key } from 'lucide-react';
 
 export function Users() {
@@ -41,7 +39,7 @@ export function Users() {
 
   async function loadUsers() {
     try {
-      const { data } = await supabase.from('users').select('*').order('email');
+      const { data } = await api.get('/users');
       if (data) setUsers(data);
     } catch (error) {
       console.error('Error loading users:', error);
@@ -67,13 +65,6 @@ export function Users() {
 
         if (error) throw error;
 
-        await logAudit({
-          user_id: currentUser?.id,
-          action: 'UPDATE',
-          entity_type: 'user',
-          entity_id: data.id,
-          after_data: { ...data, password_hash: undefined }
-        });
 
         showToast('Usuário atualizado com sucesso', 'success');
       } else {
@@ -93,13 +84,6 @@ export function Users() {
 
         if (error) throw error;
 
-        await logAudit({
-          user_id: currentUser?.id,
-          action: 'CREATE',
-          entity_type: 'user',
-          entity_id: data.id,
-          after_data: { ...data, password_hash: undefined }
-        });
 
         showToast('Usuário criado com sucesso', 'success');
       }
@@ -162,13 +146,6 @@ export function Users() {
 
       if (error) throw error;
 
-      await logAudit({
-        user_id: currentUser?.id,
-        action: 'UPDATE',
-        entity_type: 'user',
-        entity_id: passwordUserId,
-        after_data: { action: 'password_changed' }
-      });
 
       showToast('Senha alterada com sucesso', 'success');
       setShowPasswordModal(false);
@@ -194,12 +171,6 @@ export function Users() {
 
       if (error) throw error;
 
-      await logAudit({
-        user_id: currentUser?.id,
-        action: 'DELETE',
-        entity_type: 'user',
-        entity_id: userId
-      });
 
       showToast('Usuário deletado com sucesso', 'success');
       setDeleteUserId(null);

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { supabase } from '../lib/supabase';
+import { api } from '../lib/api';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
@@ -8,8 +8,6 @@ import { Select } from '../components/ui/Select';
 import { Modal } from '../components/ui/Modal';
 import { useToast } from '../components/ui/Toast';
 import { useAuth } from '../contexts/AuthContext';
-import { canManage } from '../lib/auth';
-import { logAudit } from '../lib/audit';
 import { Plus, Globe, Edit2, Trash2 } from 'lucide-react';
 
 export function IPAM() {
@@ -36,7 +34,7 @@ export function IPAM() {
 
   async function loadSubnets() {
     try {
-      const { data } = await supabase.from('subnets').select('*').order('cidr');
+      const { data } = await api.get('/subnets');
       if (data) setSubnets(data);
     } catch (error) {
       console.error('Error loading subnets:', error);
@@ -60,13 +58,6 @@ export function IPAM() {
 
         if (error) throw error;
 
-        await logAudit({
-          user_id: user?.id,
-          action: 'UPDATE',
-          entity_type: 'subnet',
-          entity_id: data.id,
-          after_data: data
-        });
 
         showToast('Sub-rede atualizada com sucesso', 'success');
       } else {
@@ -78,13 +69,6 @@ export function IPAM() {
 
         if (error) throw error;
 
-        await logAudit({
-          user_id: user?.id,
-          action: 'CREATE',
-          entity_type: 'subnet',
-          entity_id: data.id,
-          after_data: data
-        });
 
         showToast('Sub-rede criada com sucesso', 'success');
       }
@@ -132,12 +116,6 @@ export function IPAM() {
 
       if (error) throw error;
 
-      await logAudit({
-        user_id: user?.id,
-        action: 'DELETE',
-        entity_type: 'subnet',
-        entity_id: id
-      });
 
       showToast('Sub-rede excluída com sucesso', 'success');
       setDeleteConfirm(null);

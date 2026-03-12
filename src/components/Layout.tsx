@@ -2,7 +2,6 @@ import { ReactNode, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
-import { isAdmin, canManage } from '../lib/auth';
 import { NotificationBell } from './NotificationBell';
 import {
   LayoutDashboard,
@@ -50,9 +49,9 @@ export function Layout({ children }: LayoutProps) {
   ];
 
   const adminNavigation = [
-    { name: 'Usuários', href: '/admin/users', icon: Users, show: isAdmin(user?.role || 'VIEWER') },
-    { name: 'Auditoria', href: '/admin/audit', icon: Shield, show: canManage(user?.role || 'VIEWER') },
-    { name: 'Configurações', href: '/settings', icon: SettingsIcon, show: isAdmin(user?.role || 'VIEWER') },
+    { name: 'Usuários', href: '/admin/users', icon: Users, show: user?.role === 'admin' },
+    { name: 'Auditoria', href: '/admin/audit', icon: Shield, show: user?.role === 'admin' },
+    { name: 'Configurações', href: '/settings', icon: SettingsIcon, show: user?.role === 'admin' },
   ];
 
   const isActive = (href: string) => {

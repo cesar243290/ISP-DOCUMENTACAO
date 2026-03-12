@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { supabase } from '../lib/supabase';
+import { api } from '../lib/api';
 import { Card } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
@@ -7,8 +7,6 @@ import { Input } from '../components/ui/Input';
 import { Modal } from '../components/ui/Modal';
 import { useToast } from '../components/ui/Toast';
 import { useAuth } from '../contexts/AuthContext';
-import { canManage } from '../lib/auth';
-import { logAudit } from '../lib/audit';
 import { CheckSquare, Plus, Edit2, Trash2 } from 'lucide-react';
 
 export function Checklists() {
@@ -33,7 +31,7 @@ export function Checklists() {
 
   async function loadChecklists() {
     try {
-      const { data } = await supabase.from('checklists').select('*').order('title');
+      const { data } = await api.get('/checklists');
       if (data) setChecklists(data);
     } catch (error) {
       console.error('Error loading checklists:', error);
@@ -57,13 +55,6 @@ export function Checklists() {
 
         if (error) throw error;
 
-        await logAudit({
-          user_id: user?.id,
-          action: 'UPDATE',
-          entity_type: 'checklist',
-          entity_id: data.id,
-          after_data: data
-        });
 
         showToast('Checklist atualizado com sucesso', 'success');
       } else {
@@ -75,13 +66,6 @@ export function Checklists() {
 
         if (error) throw error;
 
-        await logAudit({
-          user_id: user?.id,
-          action: 'CREATE',
-          entity_type: 'checklist',
-          entity_id: data.id,
-          after_data: data
-        });
 
         showToast('Checklist criado com sucesso', 'success');
       }
@@ -125,12 +109,6 @@ export function Checklists() {
 
       if (error) throw error;
 
-      await logAudit({
-        user_id: user?.id,
-        action: 'DELETE',
-        entity_type: 'checklist',
-        entity_id: id
-      });
 
       showToast('Checklist excluído com sucesso', 'success');
       setDeleteConfirm(null);

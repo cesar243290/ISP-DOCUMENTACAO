@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { supabase } from '../lib/supabase';
+import { api } from '../lib/api';
 import { VLAN } from '../types';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
@@ -9,8 +9,6 @@ import { Modal } from '../components/ui/Modal';
 import { Badge } from '../components/ui/Badge';
 import { useToast } from '../components/ui/Toast';
 import { useAuth } from '../contexts/AuthContext';
-import { canManage } from '../lib/auth';
-import { logAudit } from '../lib/audit';
 import { Plus, Activity, Edit2, Trash2 } from 'lucide-react';
 
 export function VLANs() {
@@ -37,7 +35,7 @@ export function VLANs() {
 
   async function loadVLANs() {
     try {
-      const { data } = await supabase.from('vlans').select('*').order('vlan_id');
+      const { data } = await api.get('/vlans');
       if (data) setVlans(data);
     } catch (error) {
       console.error('Error loading VLANs:', error);
@@ -63,13 +61,6 @@ export function VLANs() {
 
         if (error) throw error;
 
-        await logAudit({
-          user_id: user?.id,
-          action: 'UPDATE',
-          entity_type: 'vlan',
-          entity_id: data.id,
-          after_data: data
-        });
 
         showToast('VLAN atualizada com sucesso', 'success');
       } else {
@@ -81,13 +72,6 @@ export function VLANs() {
 
         if (error) throw error;
 
-        await logAudit({
-          user_id: user?.id,
-          action: 'CREATE',
-          entity_type: 'vlan',
-          entity_id: data.id,
-          after_data: data
-        });
 
         showToast('VLAN criada com sucesso', 'success');
       }
@@ -135,12 +119,6 @@ export function VLANs() {
 
       if (error) throw error;
 
-      await logAudit({
-        user_id: user?.id,
-        action: 'DELETE',
-        entity_type: 'vlan',
-        entity_id: id
-      });
 
       showToast('VLAN excluída com sucesso', 'success');
       setDeleteConfirm(null);

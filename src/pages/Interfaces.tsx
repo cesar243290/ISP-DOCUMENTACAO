@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { supabase } from '../lib/supabase';
+import { api } from '../lib/api';
 import { Card } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
 import { Input } from '../components/ui/Input';
@@ -8,8 +8,6 @@ import { Modal } from '../components/ui/Modal';
 import { Select } from '../components/ui/Select';
 import { useToast } from '../components/ui/Toast';
 import { useAuth } from '../contexts/AuthContext';
-import { canManage } from '../lib/auth';
-import { logAudit } from '../lib/audit';
 import { Network, Search, Plus, Edit2, Trash2, Link, Cable } from 'lucide-react';
 
 export function Interfaces() {
@@ -62,8 +60,8 @@ export function Interfaces() {
             equipment:equipment_id (hostname, type)
           `)
           .order('name'),
-        supabase.from('equipment').select('*').order('hostname'),
-        supabase.from('interface_links_detailed').select('*'),
+        api.get('/equipment'),
+        api.get('/interface_links_detailed'),
         supabase.from('vlans').select('id, vlan_id, name').order('vlan_id')
       ]);
 
@@ -93,13 +91,6 @@ export function Interfaces() {
 
         if (error) throw error;
 
-        await logAudit({
-          user_id: user?.id,
-          action: 'UPDATE',
-          entity_type: 'interface',
-          entity_id: data.id,
-          after_data: data
-        });
 
         showToast('Interface atualizada com sucesso', 'success');
       } else {
@@ -111,13 +102,6 @@ export function Interfaces() {
 
         if (error) throw error;
 
-        await logAudit({
-          user_id: user?.id,
-          action: 'CREATE',
-          entity_type: 'interface',
-          entity_id: data.id,
-          after_data: data
-        });
 
         showToast('Interface criada com sucesso', 'success');
       }
@@ -167,12 +151,6 @@ export function Interfaces() {
 
       if (error) throw error;
 
-      await logAudit({
-        user_id: user?.id,
-        action: 'DELETE',
-        entity_type: 'interface',
-        entity_id: id
-      });
 
       showToast('Interface excluída com sucesso', 'success');
       setDeleteConfirm(null);
@@ -209,13 +187,6 @@ export function Interfaces() {
 
         if (error) throw error;
 
-        await logAudit({
-          user_id: user?.id,
-          action: 'UPDATE',
-          entity_type: 'interface_link',
-          entity_id: data.id,
-          after_data: data
-        });
 
         showToast('Enlace atualizado com sucesso', 'success');
       } else {
@@ -227,13 +198,6 @@ export function Interfaces() {
 
         if (error) throw error;
 
-        await logAudit({
-          user_id: user?.id,
-          action: 'CREATE',
-          entity_type: 'interface_link',
-          entity_id: data.id,
-          after_data: data
-        });
 
         showToast('Enlace criado com sucesso', 'success');
       }
@@ -283,12 +247,6 @@ export function Interfaces() {
 
       if (error) throw error;
 
-      await logAudit({
-        user_id: user?.id,
-        action: 'DELETE',
-        entity_type: 'interface_link',
-        entity_id: id
-      });
 
       showToast('Enlace excluído com sucesso', 'success');
       setDeleteLinkConfirm(null);

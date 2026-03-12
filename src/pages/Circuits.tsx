@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { supabase } from '../lib/supabase';
+import { api } from '../lib/api';
 import { Card } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
@@ -8,8 +8,6 @@ import { Select } from '../components/ui/Select';
 import { Modal } from '../components/ui/Modal';
 import { useToast } from '../components/ui/Toast';
 import { useAuth } from '../contexts/AuthContext';
-import { canManage } from '../lib/auth';
-import { logAudit } from '../lib/audit';
 import { Link as LinkIcon, Plus, Edit2, Trash2 } from 'lucide-react';
 
 export function Circuits() {
@@ -38,7 +36,7 @@ export function Circuits() {
 
   async function loadCircuits() {
     try {
-      const { data } = await supabase.from('circuits').select('*').order('name');
+      const { data } = await api.get('/circuits');
       if (data) setCircuits(data);
     } catch (error) {
       console.error('Error loading circuits:', error);
@@ -62,13 +60,6 @@ export function Circuits() {
 
         if (error) throw error;
 
-        await logAudit({
-          user_id: user?.id,
-          action: 'UPDATE',
-          entity_type: 'circuit',
-          entity_id: data.id,
-          after_data: data
-        });
 
         showToast('Circuito atualizado com sucesso', 'success');
       } else {
@@ -80,13 +71,6 @@ export function Circuits() {
 
         if (error) throw error;
 
-        await logAudit({
-          user_id: user?.id,
-          action: 'CREATE',
-          entity_type: 'circuit',
-          entity_id: data.id,
-          after_data: data
-        });
 
         showToast('Circuito criado com sucesso', 'success');
       }
@@ -138,12 +122,6 @@ export function Circuits() {
 
       if (error) throw error;
 
-      await logAudit({
-        user_id: user?.id,
-        action: 'DELETE',
-        entity_type: 'circuit',
-        entity_id: id
-      });
 
       showToast('Circuito excluído com sucesso', 'success');
       setDeleteConfirm(null);

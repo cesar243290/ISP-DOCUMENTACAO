@@ -68,8 +68,8 @@ No Netlify Dashboard:
 2. Adicione as seguintes variáveis:
 
 ```
-VITE_SUPABASE_URL=https://lrkaukvytfyyqoymozsl.supabase.co
-VITE_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imxya2F1a3Z5dGZ5eXFveW1venNsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzEyNTgyNzUsImV4cCI6MjA4NjgzNDI3NX0.NTDSYSTfZWzHdgI0kdoHYelFXLNxjqPuRFOtBREBPDo
+VITE_SUPABASE_URL=https://cvytvjptdbrzazizihnx.supabase.co
+VITE_SUPABASE_ANON_KEY=sb_publishable_jTbCCjjjdI4gC-BdctMn6A_TjqOWuS0
 ```
 
 ## Passo 4: Configurar Domínio (Opcional)

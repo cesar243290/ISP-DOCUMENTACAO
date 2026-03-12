@@ -53,22 +53,16 @@ export function Interfaces() {
   async function loadInterfaces() {
     try {
       const [interfaceData, equipmentData, linkData, vlanData] = await Promise.all([
-        supabase
-          .from('interfaces')
-          .select(`
-            *,
-            equipment:equipment_id (hostname, type)
-          `)
-          .order('name'),
+        api.get('/interfaces'),
         api.get('/equipment'),
-        api.get('/interface_links_detailed'),
-        supabase.from('vlans').select('id, vlan_id, name').order('vlan_id')
+        api.get('/interface_links'),
+        api.get('/vlans')
       ]);
 
-      if (interfaceData.data) setInterfaces(interfaceData.data);
-      if (equipmentData.data) setEquipments(equipmentData.data);
-      if (linkData.data) setLinks(linkData.data);
-      if (vlanData.data) setVlans(vlanData.data);
+      if (interfaceData) setInterfaces(interfaceData);
+      if (equipmentData) setEquipments(equipmentData);
+      if (linkData) setLinks(linkData);
+      if (vlanData) setVlans(vlanData);
     } catch (error) {
       console.error('Error loading interfaces:', error);
       showToast('Erro ao carregar interfaces', 'error');

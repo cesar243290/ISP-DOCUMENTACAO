@@ -40,16 +40,16 @@ export function Services() {
   async function loadData() {
     try {
       const [servicesData, equipmentsData, vlansData, runbooksData] = await Promise.all([
-        supabase.from('services').select('*, equipment:equipment_id(hostname), vlan:vlan_id(name)').order('name'),
-        supabase.from('equipment').select('id, hostname').order('hostname'),
-        supabase.from('vlans').select('id, name, vlan_id').order('name'),
-        supabase.from('runbooks').select('id, title').order('title')
+        api.get('/services'),
+        api.get('/equipment'),
+        api.get('/vlans'),
+        api.get('/runbooks')
       ]);
 
-      if (servicesData.data) setServices(servicesData.data);
-      if (equipmentsData.data) setEquipments(equipmentsData.data);
-      if (vlansData.data) setVlans(vlansData.data);
-      if (runbooksData.data) setRunbooks(runbooksData.data);
+      if (servicesData) setServices(servicesData);
+      if (equipmentsData) setEquipments(equipmentsData);
+      if (vlansData) setVlans(vlansData);
+      if (runbooksData) setRunbooks(runbooksData);
     } catch (error) {
       console.error('Error loading data:', error);
       showToast('Erro ao carregar dados', 'error');
@@ -71,27 +71,10 @@ export function Services() {
       };
 
       if (isEditing && editingId) {
-        const { data, error } = await supabase
-          .from('services')
-          .update(submitData)
-          .eq('id', editingId)
-          .select()
-          .single();
-
-        if (error) throw error;
-
-
+        await api.put(`/services/${editingId}`, submitData);
         showToast('Serviço atualizado com sucesso', 'success');
       } else {
-        const { data, error } = await supabase
-          .from('services')
-          .insert([submitData])
-          .select()
-          .single();
-
-        if (error) throw error;
-
-
+        await api.post('/services', submitData);
         showToast('Serviço criado com sucesso', 'success');
       }
 
@@ -135,10 +118,7 @@ export function Services() {
 
   async function handleDelete(id: string) {
     try {
-      const { error } = await api.delete();
-      if (error) throw error;
-
-
+      await api.delete(`/services/${id}`);
       showToast('Serviço excluído com sucesso', 'success');
       loadData();
       setDeleteConfirm(null);

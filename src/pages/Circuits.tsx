@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
-import { canManage } from '../lib/utils';
 import { Card } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
@@ -9,7 +8,9 @@ import { Select } from '../components/ui/Select';
 import { Modal } from '../components/ui/Modal';
 import { useToast } from '../components/ui/Toast';
 import { useAuth } from '../contexts/AuthContext';
-import { Link as LinkIcon, Plus, CreditCard as Edit2, Trash2 } from 'lucide-react';
+import { canManage } from '../lib/auth';
+import { logAudit } from '../lib/audit';
+import { Link as LinkIcon, Plus, Edit2, Trash2 } from 'lucide-react';
 
 export function Circuits() {
   const { user } = useAuth();
@@ -37,11 +38,7 @@ export function Circuits() {
 
   async function loadCircuits() {
     try {
-      const { data, error } = await supabase
-        .from('circuits')
-        .select('*');
-
-      if (error) throw error;
+      const { data } = await supabase.from('circuits').select('*').order('name');
       if (data) setCircuits(data);
     } catch (error) {
       console.error('Error loading circuits:', error);
@@ -65,6 +62,13 @@ export function Circuits() {
 
         if (error) throw error;
 
+        await logAudit({
+          user_id: user?.id,
+          action: 'UPDATE',
+          entity_type: 'circuit',
+          entity_id: data.id,
+          after_data: data
+        });
 
         showToast('Circuito atualizado com sucesso', 'success');
       } else {
@@ -76,6 +80,13 @@ export function Circuits() {
 
         if (error) throw error;
 
+        await logAudit({
+          user_id: user?.id,
+          action: 'CREATE',
+          entity_type: 'circuit',
+          entity_id: data.id,
+          after_data: data
+        });
 
         showToast('Circuito criado com sucesso', 'success');
       }
@@ -127,6 +138,12 @@ export function Circuits() {
 
       if (error) throw error;
 
+      await logAudit({
+        user_id: user?.id,
+        action: 'DELETE',
+        entity_type: 'circuit',
+        entity_id: id
+      });
 
       showToast('Circuito excluído com sucesso', 'success');
       setDeleteConfirm(null);
@@ -143,8 +160,6 @@ export function Circuits() {
     setEditingId(null);
     resetForm();
   }
-
-  const userCanManage = user ? canManage(user.role) : false;
 
   const statusColors: Record<string, 'success' | 'warning' | 'danger' | 'default'> = {
     ACTIVE: 'success',
@@ -170,7 +185,7 @@ export function Circuits() {
           <h1 className="text-3xl font-semibold text-gray-900 dark:text-gray-100">Circuitos & Enlaces</h1>
           <p className="text-gray-600 dark:text-gray-400 mt-1">Gestão de circuitos e enlaces de rede</p>
         </div>
-        {userCanManage && (
+        {canManage(user!.role) && (
           <Button onClick={() => setShowModal(true)}>
             <Plus className="w-4 h-4 mr-2" />
             Novo Circuito
@@ -219,7 +234,7 @@ export function Circuits() {
               )}
             </div>
 
-            {userCanManage && (
+            {canManage(user!.role) && (
               <div className="flex gap-2 pt-3 border-t dark:border-gray-700">
                 <Button
                   variant="secondary"

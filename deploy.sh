@@ -1,259 +1,262 @@
 #!/bin/bash
 
-# ISP NOC System - Ubuntu Deployment Script
-# This script automates the deployment process on Ubuntu servers
-
 set -e
 
-echo "==========================================="
-echo "  ISP NOC System - Deployment Script"
-echo "==========================================="
+echo "=================================================="
+echo "  ISP NOC Manager - Deploy Automático"
+echo "=================================================="
 echo ""
 
-# Colors for output
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-NC='\033[0m'
+DEPLOY_MODE=${1:-"docker"}
 
-# Functions
-success() {
-    echo -e "${GREEN}✓ $1${NC}"
-}
+if [ "$DEPLOY_MODE" = "docker" ]; then
+    echo "🐳 Modo: Docker Compose"
+    echo ""
 
-error() {
-    echo -e "${RED}✗ $1${NC}"
-}
+    echo "📦 Verificando Docker..."
+    if ! command -v docker &> /dev/null; then
+        echo "❌ Docker não encontrado! Instale o Docker primeiro."
+        exit 1
+    fi
 
-info() {
-    echo -e "${BLUE}ℹ $1${NC}"
-}
+    if ! command -v docker compose &> /dev/null && ! command -v docker-compose &> /dev/null; then
+        echo "❌ Docker Compose não encontrado! Instale o Docker Compose primeiro."
+        exit 1
+    fi
 
-warn() {
-    echo -e "${YELLOW}⚠ $1${NC}"
-}
+    echo "✓ Docker instalado"
+    echo ""
 
-# Check if running as root
-if [ "$EUID" -ne 0 ]; then
-    error "Please run this script with sudo"
-    exit 1
-fi
+    echo "🏗️  Fazendo build do frontend..."
+    npm install
+    npm run build
+    echo "✓ Build concluído"
+    echo ""
 
-# Get installation directory
-INSTALL_DIR="/opt/isp-noc"
-info "Installation directory: $INSTALL_DIR"
+    echo "🚀 Iniciando containers..."
+    docker compose down 2>/dev/null || true
+    docker compose up -d
+    echo "✓ Containers iniciados"
+    echo ""
 
-# Step 1: Install system dependencies
-info "Installing system dependencies..."
-apt update
-apt install -y curl wget git build-essential nginx mariadb-server
+    echo "⏳ Aguardando backend inicializar..."
+    sleep 5
 
-# Install Node.js 18.x
-if ! command -v node &> /dev/null; then
-    info "Installing Node.js 18.x..."
-    curl -fsSL https://deb.nodesource.com/setup_18.x | bash -
-    apt install -y nodejs
-fi
+    echo ""
+    echo "✅ Deploy concluído com sucesso!"
+    echo ""
+    echo "📍 Acesse o sistema:"
+    echo "   → Frontend: http://localhost"
+    echo "   → API: http://localhost:3001/api/health"
+    echo ""
+    echo "🔐 Credenciais padrão:"
+    echo "   Email: admin@ispnoc.local"
+    echo "   Senha: Admin@123"
+    echo ""
+    echo "📊 Ver logs:"
+    echo "   docker compose logs -f"
+    echo ""
+    echo "⛔ Parar:"
+    echo "   docker compose down"
+    echo ""
 
-node_version=$(node --version)
-success "Node.js installed: $node_version"
+elif [ "$DEPLOY_MODE" = "local" ]; then
+    echo "💻 Modo: Local (sem Docker)"
+    echo ""
 
-# Install PM2
-if ! command -v pm2 &> /dev/null; then
-    info "Installing PM2..."
-    npm install -g pm2
-fi
-success "PM2 installed"
+    echo "📦 Verificando Node.js..."
+    if ! command -v node &> /dev/null; then
+        echo "❌ Node.js não encontrado! Instale o Node.js primeiro."
+        exit 1
+    fi
+    echo "✓ Node.js instalado: $(node --version)"
+    echo ""
 
-# Step 2: Setup MariaDB
-info "Setting up MariaDB..."
-systemctl start mariadb
-systemctl enable mariadb
+    echo "📦 Instalando dependências do backend..."
+    cd backend
+    npm install
+    echo "✓ Dependências instaladas"
+    echo ""
 
-# Create database and user
-DB_NAME="isp_noc"
-DB_USER="isp_user"
-DB_PASS=$(openssl rand -base64 16)
+    echo "🗄️  Inicializando banco de dados..."
+    npm run init-db
+    echo "✓ Banco inicializado"
+    echo ""
 
-info "Creating database: $DB_NAME"
-mysql -e "CREATE DATABASE IF NOT EXISTS $DB_NAME CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
-mysql -e "CREATE USER IF NOT EXISTS '$DB_USER'@'localhost' IDENTIFIED BY '$DB_PASS';"
-mysql -e "GRANT ALL PRIVILEGES ON $DB_NAME.* TO '$DB_USER'@'localhost';"
-mysql -e "FLUSH PRIVILEGES;"
+    echo "🏗️  Fazendo build do frontend..."
+    cd ..
+    npm install
+    npm run build
+    echo "✓ Build concluído"
+    echo ""
 
-success "Database created: $DB_NAME"
-success "Database user created: $DB_USER"
+    echo "🚀 Iniciando backend em background..."
+    cd backend
+    nohup npm start > ../backend.log 2>&1 &
+    BACKEND_PID=$!
+    echo $BACKEND_PID > ../backend.pid
+    cd ..
+    echo "✓ Backend iniciado (PID: $BACKEND_PID)"
+    echo ""
 
-# Import schema
-if [ -f "$INSTALL_DIR/server/database/schema.sql" ]; then
-    info "Importing database schema..."
-    mysql $DB_NAME < "$INSTALL_DIR/server/database/schema.sql"
-    success "Schema imported"
-fi
+    echo "⏳ Aguardando backend inicializar..."
+    sleep 3
 
-# Import seed data
-if [ -f "$INSTALL_DIR/seed.sql" ]; then
-    info "Importing seed data..."
-    mysql $DB_NAME < "$INSTALL_DIR/seed.sql"
-    success "Seed data imported"
-fi
+    echo "📦 Verificando Nginx..."
+    if ! command -v nginx &> /dev/null; then
+        echo "⚠️  Nginx não encontrado. Você precisará configurá-lo manualmente."
+        echo "   Veja DEPLOY-UBUNTU.md para instruções completas"
+    else
+        echo "✓ Nginx instalado"
+        echo "   Configure o Nginx conforme DEPLOY-UBUNTU.md"
+    fi
+    echo ""
 
-# Step 3: Configure backend
-info "Configuring backend..."
-mkdir -p "$INSTALL_DIR/server"
-cd "$INSTALL_DIR/server"
+    echo "✅ Deploy local concluído!"
+    echo ""
+    echo "📍 Backend rodando em:"
+    echo "   → API: http://localhost:3001/api/health"
+    echo "   → Logs: tail -f backend.log"
+    echo ""
+    echo "⚠️  Para servir o frontend:"
+    echo "   1. Configure o Nginx conforme DEPLOY-UBUNTU.md, ou"
+    echo "   2. Use: npx serve dist -l 5173"
+    echo ""
+    echo "🔐 Credenciais padrão:"
+    echo "   Email: admin@ispnoc.local"
+    echo "   Senha: Admin@123"
+    echo ""
+    echo "⛔ Parar backend:"
+    echo "   kill \$(cat backend.pid) && rm backend.pid"
+    echo ""
 
-# Create .env file
-JWT_SECRET=$(openssl rand -base64 32)
-ENCRYPTION_KEY=$(openssl rand -base64 32)
+elif [ "$DEPLOY_MODE" = "systemd" ]; then
+    echo "🐧 Modo: SystemD (Ubuntu/Debian)"
+    echo ""
 
-cat > .env <<EOF
-PORT=3001
-DB_HOST=localhost
-DB_USER=$DB_USER
-DB_PASSWORD=$DB_PASS
-DB_NAME=$DB_NAME
-JWT_SECRET=$JWT_SECRET
-ENCRYPTION_KEY=$ENCRYPTION_KEY
-NODE_ENV=production
+    if [ "$EUID" -ne 0 ]; then
+        echo "❌ Este modo requer privilégios de root"
+        echo "   Execute: sudo ./deploy.sh systemd"
+        exit 1
+    fi
+
+    echo "📦 Instalando dependências do sistema..."
+    apt update
+    apt install -y nodejs npm nginx
+    echo "✓ Dependências instaladas"
+    echo ""
+
+    echo "📦 Instalando dependências do backend..."
+    cd backend
+    npm install
+    echo "✓ Dependências instaladas"
+    echo ""
+
+    echo "🗄️  Inicializando banco de dados..."
+    npm run init-db
+    echo "✓ Banco inicializado"
+    cd ..
+    echo ""
+
+    echo "🏗️  Fazendo build do frontend..."
+    npm install
+    npm run build
+    echo "✓ Build concluído"
+    echo ""
+
+    echo "📁 Copiando arquivos..."
+    mkdir -p /var/www/isp-noc
+    cp -r dist/* /var/www/isp-noc/
+    cp -r backend /opt/isp-noc-backend
+    echo "✓ Arquivos copiados"
+    echo ""
+
+    echo "⚙️  Configurando serviço SystemD..."
+    cat > /etc/systemd/system/isp-noc-backend.service << 'EOF'
+[Unit]
+Description=ISP NOC Backend
+After=network.target
+
+[Service]
+Type=simple
+User=www-data
+WorkingDirectory=/opt/isp-noc-backend
+ExecStart=/usr/bin/node server.js
+Restart=always
+RestartSec=10
+Environment=NODE_ENV=production
+Environment=PORT=3001
+Environment=DB_PATH=/opt/isp-noc-backend/data/ispnoc.db
+
+[Install]
+WantedBy=multi-user.target
 EOF
 
-success "Backend .env created"
+    systemctl daemon-reload
+    systemctl enable isp-noc-backend
+    systemctl start isp-noc-backend
+    echo "✓ Serviço configurado e iniciado"
+    echo ""
 
-# Install backend dependencies
-if [ -f "package.json" ]; then
-    info "Installing backend dependencies..."
-    npm install --production
-    success "Backend dependencies installed"
-fi
-
-# Step 4: Build frontend
-info "Building frontend..."
-cd "$INSTALL_DIR"
-
-# Create frontend .env
-cat > .env <<EOF
-VITE_API_URL=/api
-EOF
-
-# Install frontend dependencies and build
-npm install
-npm run build
-
-success "Frontend built successfully"
-
-# Step 5: Configure PM2
-info "Configuring PM2..."
-cd "$INSTALL_DIR/server"
-pm2 delete isp-noc-api 2>/dev/null || true
-pm2 start server.js --name isp-noc-api
-pm2 save
-pm2 startup systemd -u root --hp /root
-
-success "PM2 configured and running"
-
-# Step 6: Configure Nginx
-info "Configuring Nginx..."
-
-cat > /etc/nginx/sites-available/isp-noc <<'EOF'
+    echo "⚙️  Configurando Nginx..."
+    cat > /etc/nginx/sites-available/isp-noc << 'EOF'
 server {
     listen 80;
     server_name _;
 
-    root /opt/isp-noc/dist;
+    root /var/www/isp-noc;
     index index.html;
 
-    # Frontend - SPA routing
+    location /api/ {
+        proxy_pass http://localhost:3001/api/;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    }
+
     location / {
         try_files $uri $uri/ /index.html;
     }
-
-    # Backend API
-    location /api {
-        proxy_pass http://localhost:3001;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection 'upgrade';
-        proxy_set_header Host $host;
-        proxy_cache_bypass $http_upgrade;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-    }
-
-    # Security headers
-    add_header X-Frame-Options "SAMEORIGIN" always;
-    add_header X-Content-Type-Options "nosniff" always;
-    add_header X-XSS-Protection "1; mode=block" always;
-
-    # Gzip compression
-    gzip on;
-    gzip_vary on;
-    gzip_min_length 1024;
-    gzip_types text/plain text/css text/xml text/javascript application/javascript application/xml+rss application/json;
 }
 EOF
 
-# Enable site
-ln -sf /etc/nginx/sites-available/isp-noc /etc/nginx/sites-enabled/
-rm -f /etc/nginx/sites-enabled/default
+    ln -sf /etc/nginx/sites-available/isp-noc /etc/nginx/sites-enabled/
+    rm -f /etc/nginx/sites-enabled/default
+    nginx -t && systemctl reload nginx
+    echo "✓ Nginx configurado"
+    echo ""
 
-# Test Nginx config
-nginx -t
+    echo "✅ Deploy SystemD concluído!"
+    echo ""
+    echo "📍 Sistema disponível em:"
+    echo "   → http://seu-servidor"
+    echo ""
+    echo "🔐 Credenciais padrão:"
+    echo "   Email: admin@ispnoc.local"
+    echo "   Senha: Admin@123"
+    echo ""
+    echo "📊 Gerenciar serviço:"
+    echo "   systemctl status isp-noc-backend"
+    echo "   systemctl restart isp-noc-backend"
+    echo "   journalctl -u isp-noc-backend -f"
+    echo ""
 
-# Reload Nginx
-systemctl reload nginx
-systemctl enable nginx
-
-success "Nginx configured"
-
-# Step 7: Set permissions
-info "Setting permissions..."
-chown -R www-data:www-data "$INSTALL_DIR/dist"
-chmod -R 755 "$INSTALL_DIR/dist"
-
-success "Permissions set"
-
-# Display summary
-echo ""
-echo "==========================================="
-echo "  ✓ Deployment Completed Successfully!"
-echo "==========================================="
-echo ""
-echo "System Information:"
-echo "-------------------"
-echo "Installation Dir: $INSTALL_DIR"
-echo "Database: $DB_NAME"
-echo "Database User: $DB_USER"
-echo "Database Password: $DB_PASS"
-echo ""
-echo "Backend Configuration:"
-echo "---------------------"
-echo "API URL: http://localhost:3001"
-echo "PM2 Process: isp-noc-api"
-echo ""
-echo "Frontend Configuration:"
-echo "----------------------"
-echo "Web Root: $INSTALL_DIR/dist"
-echo "Nginx Config: /etc/nginx/sites-available/isp-noc"
-echo ""
-echo "Login Credentials:"
-echo "-----------------"
-echo "Email: admin@admin.com"
-echo "Password: admin123"
-echo ""
-echo "⚠ IMPORTANT: Change the admin password after first login!"
-echo ""
-echo "Useful Commands:"
-echo "---------------"
-echo "View backend logs:   pm2 logs isp-noc-api"
-echo "Restart backend:     pm2 restart isp-noc-api"
-echo "View Nginx logs:     tail -f /var/log/nginx/error.log"
-echo "Restart Nginx:       systemctl restart nginx"
-echo ""
-echo "Access your ISP NOC System:"
-echo "http://$(hostname -I | awk '{print $1}')"
-echo ""
-echo "Deployed on: $(date)"
-echo "==========================================="
+else
+    echo "❌ Modo de deploy inválido!"
+    echo ""
+    echo "Uso: ./deploy.sh [modo]"
+    echo ""
+    echo "Modos disponíveis:"
+    echo "  docker    - Deploy com Docker Compose (padrão)"
+    echo "  local     - Deploy local sem Docker"
+    echo "  systemd   - Deploy com SystemD (requer root)"
+    echo ""
+    echo "Exemplos:"
+    echo "  ./deploy.sh"
+    echo "  ./deploy.sh docker"
+    echo "  ./deploy.sh local"
+    echo "  sudo ./deploy.sh systemd"
+    echo ""
+    exit 1
+fi

@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
-import { userCanManage } from '../lib/utils';
 import { POP } from '../types';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
@@ -8,7 +7,9 @@ import { Input } from '../components/ui/Input';
 import { Modal } from '../components/ui/Modal';
 import { useToast } from '../components/ui/Toast';
 import { useAuth } from '../contexts/AuthContext';
-import { Plus, MapPin, CreditCard as Edit2, Trash2 } from 'lucide-react';
+import { canManage } from '../lib/auth';
+import { logAudit } from '../lib/audit';
+import { Plus, MapPin, Edit2, Trash2 } from 'lucide-react';
 
 export function POPs() {
   const { user } = useAuth();
@@ -36,11 +37,7 @@ export function POPs() {
 
   async function loadPOPs() {
     try {
-      const { data, error } = await supabase
-        .from('pops')
-        .select('*');
-
-      if (error) throw error;
+      const { data } = await supabase.from('pops').select('*').order('name');
       if (data) setPops(data);
     } catch (error) {
       console.error('Error loading POPs:', error);
@@ -63,6 +60,15 @@ export function POPs() {
           .single();
 
         if (error) throw error;
+
+        await logAudit({
+          user_id: user?.id,
+          action: 'UPDATE',
+          entity_type: 'pop',
+          entity_id: data.id,
+          after_data: data
+        });
+
         showToast('POP atualizado com sucesso', 'success');
       } else {
         const { data, error } = await supabase
@@ -72,6 +78,15 @@ export function POPs() {
           .single();
 
         if (error) throw error;
+
+        await logAudit({
+          user_id: user?.id,
+          action: 'CREATE',
+          entity_type: 'pop',
+          entity_id: data.id,
+          after_data: data
+        });
+
         showToast('POP criado com sucesso', 'success');
       }
 
@@ -121,6 +136,14 @@ export function POPs() {
         .eq('id', id);
 
       if (error) throw error;
+
+      await logAudit({
+        user_id: user?.id,
+        action: 'DELETE',
+        entity_type: 'pop',
+        entity_id: id
+      });
+
       showToast('POP excluído com sucesso', 'success');
       setDeleteConfirm(null);
       loadPOPs();
@@ -136,8 +159,6 @@ export function POPs() {
     setEditingId(null);
     resetForm();
   }
-
-  const userCanManage = user ? userCanManage(user.role) : false;
 
   if (loading) {
     return (
@@ -156,7 +177,7 @@ export function POPs() {
           <h1 className="text-3xl font-semibold text-gray-900 dark:text-gray-100">POPs / Sites</h1>
           <p className="text-gray-600 dark:text-gray-400 mt-1">Pontos de Presença da rede</p>
         </div>
-        {userCanManage && (
+        {canManage(user!.role) && (
           <Button onClick={() => setShowModal(true)}>
             <Plus className="w-4 h-4 mr-2" />
             Novo POP
@@ -192,7 +213,7 @@ export function POPs() {
               )}
             </div>
 
-            {userCanManage(user!.role) && (
+            {canManage(user!.role) && (
               <div className="flex gap-2 pt-3 border-t dark:border-gray-700">
                 <Button
                   variant="secondary"

@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
-import { canManage } from '../lib/utils';
 import { Card } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
 import { Input } from '../components/ui/Input';
@@ -9,7 +8,9 @@ import { Modal } from '../components/ui/Modal';
 import { Select } from '../components/ui/Select';
 import { useToast } from '../components/ui/Toast';
 import { useAuth } from '../contexts/AuthContext';
-import { Network, Search, Plus, CreditCard as Edit2, Trash2, Link, Cable } from 'lucide-react';
+import { canManage } from '../lib/auth';
+import { logAudit } from '../lib/audit';
+import { Network, Search, Plus, Edit2, Trash2, Link, Cable } from 'lucide-react';
 
 export function Interfaces() {
   const { user } = useAuth();
@@ -53,33 +54,23 @@ export function Interfaces() {
 
   async function loadInterfaces() {
     try {
-      const [
-        { data: interfaceData, error: interfaceError },
-        { data: equipmentData, error: equipmentError },
-        { data: linkData, error: linkError },
-        { data: vlanData, error: vlanError }
-      ] = await Promise.all([
-        supabase.from('interfaces').select('*, equipment(*)'),
-        supabase.from('equipment').select('*'),
-        supabase.from('interface_links').select(`
-          *,
-          interface_a:interface_a_id(*),
-          interface_b:interface_b_id(*),
-          equipment_a:interface_a_id(equipment(*)),
-          equipment_b:interface_b_id(equipment(*))
-        `),
-        supabase.from('vlans').select('*')
+      const [interfaceData, equipmentData, linkData, vlanData] = await Promise.all([
+        supabase
+          .from('interfaces')
+          .select(`
+            *,
+            equipment:equipment_id (hostname, type)
+          `)
+          .order('name'),
+        supabase.from('equipment').select('*').order('hostname'),
+        supabase.from('interface_links_detailed').select('*'),
+        supabase.from('vlans').select('id, vlan_id, name').order('vlan_id')
       ]);
 
-      if (interfaceError) throw interfaceError;
-      if (equipmentError) throw equipmentError;
-      if (linkError) throw linkError;
-      if (vlanError) throw vlanError;
-
-      if (interfaceData) setInterfaces(interfaceData);
-      if (equipmentData) setEquipments(equipmentData);
-      if (linkData) setLinks(linkData);
-      if (vlanData) setVlans(vlanData);
+      if (interfaceData.data) setInterfaces(interfaceData.data);
+      if (equipmentData.data) setEquipments(equipmentData.data);
+      if (linkData.data) setLinks(linkData.data);
+      if (vlanData.data) setVlans(vlanData.data);
     } catch (error) {
       console.error('Error loading interfaces:', error);
       showToast('Erro ao carregar interfaces', 'error');
@@ -102,6 +93,13 @@ export function Interfaces() {
 
         if (error) throw error;
 
+        await logAudit({
+          user_id: user?.id,
+          action: 'UPDATE',
+          entity_type: 'interface',
+          entity_id: data.id,
+          after_data: data
+        });
 
         showToast('Interface atualizada com sucesso', 'success');
       } else {
@@ -113,6 +111,13 @@ export function Interfaces() {
 
         if (error) throw error;
 
+        await logAudit({
+          user_id: user?.id,
+          action: 'CREATE',
+          entity_type: 'interface',
+          entity_id: data.id,
+          after_data: data
+        });
 
         showToast('Interface criada com sucesso', 'success');
       }
@@ -162,6 +167,12 @@ export function Interfaces() {
 
       if (error) throw error;
 
+      await logAudit({
+        user_id: user?.id,
+        action: 'DELETE',
+        entity_type: 'interface',
+        entity_id: id
+      });
 
       showToast('Interface excluída com sucesso', 'success');
       setDeleteConfirm(null);
@@ -198,6 +209,13 @@ export function Interfaces() {
 
         if (error) throw error;
 
+        await logAudit({
+          user_id: user?.id,
+          action: 'UPDATE',
+          entity_type: 'interface_link',
+          entity_id: data.id,
+          after_data: data
+        });
 
         showToast('Enlace atualizado com sucesso', 'success');
       } else {
@@ -209,6 +227,13 @@ export function Interfaces() {
 
         if (error) throw error;
 
+        await logAudit({
+          user_id: user?.id,
+          action: 'CREATE',
+          entity_type: 'interface_link',
+          entity_id: data.id,
+          after_data: data
+        });
 
         showToast('Enlace criado com sucesso', 'success');
       }
@@ -258,6 +283,12 @@ export function Interfaces() {
 
       if (error) throw error;
 
+      await logAudit({
+        user_id: user?.id,
+        action: 'DELETE',
+        entity_type: 'interface_link',
+        entity_id: id
+      });
 
       showToast('Enlace excluído com sucesso', 'success');
       setDeleteLinkConfirm(null);
@@ -280,8 +311,6 @@ export function Interfaces() {
       link => link.interface_a_id === interfaceId || link.interface_b_id === interfaceId
     );
   }
-
-  const userCanManage = user ? canManage(user.role) : false;
 
   const filteredInterfaces = interfaces.filter(iface =>
     iface.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -306,7 +335,7 @@ export function Interfaces() {
           <h1 className="text-3xl font-semibold text-gray-900 dark:text-gray-100">Interfaces</h1>
           <p className="text-gray-600 dark:text-gray-400 mt-1">Interfaces de rede e enlaces entre equipamentos</p>
         </div>
-        {userCanManage && (
+        {canManage(user!.role) && (
           <div className="flex gap-3 flex-wrap">
             <Button variant="secondary" onClick={() => setShowLinkModal(true)}>
               <Cable className="w-4 h-4 mr-2" />
@@ -397,7 +426,7 @@ export function Interfaces() {
                 )}
               </div>
 
-              {userCanManage && (
+              {canManage(user!.role) && (
                 <div className="flex gap-2 pt-3 border-t dark:border-gray-700">
                   <Button
                     variant="secondary"

@@ -19,27 +19,24 @@ export function Dashboard() {
 
   async function loadStats() {
     try {
-      const { data: equipment } = await supabase
+      const [equipmentData, interfacesData, popsData, failedData] = await Promise.all([
+        supabase.from('equipment').select('id', { count: 'exact', head: true }),
+        supabase.from('interfaces').select('id', { count: 'exact', head: true }),
+        supabase.from('pops').select('id', { count: 'exact', head: true }),
+        supabase.from('equipment').select('id', { count: 'exact', head: true }).eq('status', 'FAILED')
+      ]);
+
+      const activeData = await supabase
         .from('equipment')
-        .select('id, status');
-
-      const { data: interfaces } = await supabase
-        .from('interfaces')
-        .select('id');
-
-      const { data: pops } = await supabase
-        .from('pops')
-        .select('id');
-
-      const activeEquipment = equipment?.filter((e: any) => e.status === 'ACTIVE').length || 0;
-      const failedEquipment = equipment?.filter((e: any) => e.status === 'FAILED').length || 0;
+        .select('id', { count: 'exact', head: true })
+        .eq('status', 'ACTIVE');
 
       setStats({
-        totalEquipment: equipment?.length || 0,
-        activeEquipment,
-        totalInterfaces: interfaces?.length || 0,
-        totalPOPs: pops?.length || 0,
-        failedEquipment
+        totalEquipment: equipmentData.count || 0,
+        activeEquipment: activeData.count || 0,
+        totalInterfaces: interfacesData.count || 0,
+        totalPOPs: popsData.count || 0,
+        failedEquipment: failedData.count || 0
       });
     } catch (error) {
       console.error('Error loading stats:', error);

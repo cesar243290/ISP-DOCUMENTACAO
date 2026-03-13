@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
-import { canManage } from '../lib/utils';
 import { Card } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
@@ -9,7 +8,9 @@ import { Select } from '../components/ui/Select';
 import { Modal } from '../components/ui/Modal';
 import { useToast } from '../components/ui/Toast';
 import { useAuth } from '../contexts/AuthContext';
-import { Settings, Plus, CreditCard as Edit2, Trash2 } from 'lucide-react';
+import { canManage } from '../lib/auth';
+import { logAudit } from '../lib/audit';
+import { Settings, Plus, Edit2, Trash2 } from 'lucide-react';
 
 export function Services() {
   const { user } = useAuth();
@@ -40,27 +41,17 @@ export function Services() {
 
   async function loadData() {
     try {
-      const [
-        { data: servicesData, error: servicesError },
-        { data: equipmentsData, error: equipmentsError },
-        { data: vlansData, error: vlansError },
-        { data: runbooksData, error: runbooksError }
-      ] = await Promise.all([
-        supabase.from('services').select('*, equipment(*), vlan:vlan_id(*), runbook:runbook_id(*)'),
-        supabase.from('equipment').select('*'),
-        supabase.from('vlans').select('*'),
-        supabase.from('runbooks').select('*')
+      const [servicesData, equipmentsData, vlansData, runbooksData] = await Promise.all([
+        supabase.from('services').select('*, equipment:equipment_id(hostname), vlan:vlan_id(name)').order('name'),
+        supabase.from('equipment').select('id, hostname').order('hostname'),
+        supabase.from('vlans').select('id, name, vlan_id').order('name'),
+        supabase.from('runbooks').select('id, title').order('title')
       ]);
 
-      if (servicesError) throw servicesError;
-      if (equipmentsError) throw equipmentsError;
-      if (vlansError) throw vlansError;
-      if (runbooksError) throw runbooksError;
-
-      if (servicesData) setServices(servicesData);
-      if (equipmentsData) setEquipments(equipmentsData);
-      if (vlansData) setVlans(vlansData);
-      if (runbooksData) setRunbooks(runbooksData);
+      if (servicesData.data) setServices(servicesData.data);
+      if (equipmentsData.data) setEquipments(equipmentsData.data);
+      if (vlansData.data) setVlans(vlansData.data);
+      if (runbooksData.data) setRunbooks(runbooksData.data);
     } catch (error) {
       console.error('Error loading data:', error);
       showToast('Erro ao carregar dados', 'error');
@@ -90,6 +81,15 @@ export function Services() {
           .single();
 
         if (error) throw error;
+
+        await logAudit({
+          user_id: user?.id,
+          action: 'UPDATE',
+          entity_type: 'service',
+          entity_id: data.id,
+          after_data: data
+        });
+
         showToast('Serviço atualizado com sucesso', 'success');
       } else {
         const { data, error } = await supabase
@@ -99,6 +99,15 @@ export function Services() {
           .single();
 
         if (error) throw error;
+
+        await logAudit({
+          user_id: user?.id,
+          action: 'CREATE',
+          entity_type: 'service',
+          entity_id: data.id,
+          after_data: data
+        });
+
         showToast('Serviço criado com sucesso', 'success');
       }
 
@@ -142,12 +151,16 @@ export function Services() {
 
   async function handleDelete(id: string) {
     try {
-      const { error } = await supabase
-        .from('services')
-        .delete()
-        .eq('id', id);
-
+      const { error } = await supabase.from('services').delete().eq('id', id);
       if (error) throw error;
+
+      await logAudit({
+        user_id: user?.id,
+        action: 'DELETE',
+        entity_type: 'service',
+        entity_id: id
+      });
+
       showToast('Serviço excluído com sucesso', 'success');
       loadData();
       setDeleteConfirm(null);
@@ -156,8 +169,6 @@ export function Services() {
       showToast(`Erro ao excluir serviço: ${error.message}`, 'error');
     }
   }
-
-  const userCanManage = user ? canManage(user.role) : false;
 
   const typeColors: Record<string, 'success' | 'info' | 'warning' | 'default'> = {
     PPPOE: 'success',
@@ -188,7 +199,7 @@ export function Services() {
           <h1 className="text-3xl font-semibold text-gray-900 dark:text-gray-100">Serviços</h1>
           <p className="text-gray-600 dark:text-gray-400 mt-1">Serviços NOC (PPPoE, RADIUS, DNS, etc)</p>
         </div>
-        {userCanManage && (
+        {canManage(user?.role || 'VIEWER') && (
           <Button onClick={() => { resetForm(); setShowModal(true); }}>
             <Plus className="w-4 h-4 mr-2" />
             Adicionar Serviço
@@ -228,7 +239,7 @@ export function Services() {
                 <p className="text-sm text-gray-600 dark:text-gray-400 mt-3">{service.observations}</p>
               )}
 
-              {userCanManage && (
+              {canManage(user?.role || 'VIEWER') && (
                 <div className="flex gap-2 mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
                   <button
                     onClick={() => handleEdit(service)}

@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
-import { canManage } from '../lib/utils';
 import { Equipment, POP } from '../types';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
@@ -10,8 +9,10 @@ import { Modal } from '../components/ui/Modal';
 import { Select } from '../components/ui/Select';
 import { useToast } from '../components/ui/Toast';
 import { useAuth } from '../contexts/AuthContext';
+import { canManage } from '../lib/auth';
+import { logAudit } from '../lib/audit';
 import { EquipmentCredentials } from '../components/EquipmentCredentials';
-import { Plus, Server, Search, CreditCard as Edit2, Trash2, Key } from 'lucide-react';
+import { Plus, Server, Search, Edit2, Trash2, Key } from 'lucide-react';
 
 export function Equipments() {
   const { user } = useAuth();
@@ -47,16 +48,13 @@ export function Equipments() {
 
   async function loadData() {
     try {
-      const [{ data: equipmentData, error: equipmentError }, { data: popData, error: popError }] = await Promise.all([
-        supabase.from('equipment').select('*'),
-        supabase.from('pops').select('*')
+      const [equipmentData, popData] = await Promise.all([
+        supabase.from('equipment').select('*').order('hostname'),
+        supabase.from('pops').select('*').order('name')
       ]);
 
-      if (equipmentError) throw equipmentError;
-      if (popError) throw popError;
-
-      if (equipmentData) setEquipments(equipmentData);
-      if (popData) setPops(popData);
+      if (equipmentData.data) setEquipments(equipmentData.data);
+      if (popData.data) setPops(popData.data);
     } catch (error) {
       console.error('Error loading data:', error);
       showToast('Erro ao carregar dados', 'error');
@@ -84,6 +82,13 @@ export function Equipments() {
 
         if (error) throw error;
 
+        await logAudit({
+          user_id: user?.id,
+          action: 'UPDATE',
+          entity_type: 'equipment',
+          entity_id: data.id,
+          after_data: data
+        });
 
         showToast('Equipamento atualizado com sucesso', 'success');
       } else {
@@ -95,6 +100,13 @@ export function Equipments() {
 
         if (error) throw error;
 
+        await logAudit({
+          user_id: user?.id,
+          action: 'CREATE',
+          entity_type: 'equipment',
+          entity_id: data.id,
+          after_data: data
+        });
 
         showToast('Equipamento criado com sucesso', 'success');
       }
@@ -150,6 +162,12 @@ export function Equipments() {
 
       if (error) throw error;
 
+      await logAudit({
+        user_id: user?.id,
+        action: 'DELETE',
+        entity_type: 'equipment',
+        entity_id: id
+      });
 
       showToast('Equipamento excluído com sucesso', 'success');
       setDeleteConfirm(null);
@@ -176,8 +194,6 @@ export function Equipments() {
     return matchesSearch && matchesType && matchesStatus && matchesPop;
   });
 
-  const userCanManage = user ? canManage(user.role) : false;
-
   const statusColors: Record<string, 'success' | 'warning' | 'danger' | 'default'> = {
     ACTIVE: 'success',
     MAINTENANCE: 'warning',
@@ -202,7 +218,7 @@ export function Equipments() {
           <h1 className="text-3xl font-semibold text-gray-900 dark:text-gray-100">Equipamentos</h1>
           <p className="text-gray-600 dark:text-gray-400 mt-1">Inventário completo de equipamentos de rede</p>
         </div>
-        {userCanManage && (
+        {canManage(user!.role) && (
           <Button onClick={() => setShowModal(true)}>
             <Plus className="w-4 h-4 mr-2" />
             Novo Equipamento
@@ -299,7 +315,7 @@ export function Equipments() {
               </div>
             </div>
 
-            {userCanManage && (
+            {canManage(user!.role) && (
               <div className="space-y-2 pt-3 border-t dark:border-gray-700">
                 <Button
                   variant="outline"

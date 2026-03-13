@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
-import { canManage } from '../lib/utils';
 import { Card } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
@@ -9,7 +8,9 @@ import { Select } from '../components/ui/Select';
 import { Modal } from '../components/ui/Modal';
 import { useToast } from '../components/ui/Toast';
 import { useAuth } from '../contexts/AuthContext';
-import { FileText, Plus, CreditCard as Edit2, Trash2 } from 'lucide-react';
+import { canManage } from '../lib/auth';
+import { logAudit } from '../lib/audit';
+import { FileText, Plus, Edit2, Trash2 } from 'lucide-react';
 
 export function Runbooks() {
   const { user } = useAuth();
@@ -34,11 +35,7 @@ export function Runbooks() {
 
   async function loadRunbooks() {
     try {
-      const { data, error } = await supabase
-        .from('runbooks')
-        .select('*');
-
-      if (error) throw error;
+      const { data } = await supabase.from('runbooks').select('*').order('title');
       if (data) setRunbooks(data);
     } catch (error) {
       console.error('Error loading runbooks:', error);
@@ -67,6 +64,13 @@ export function Runbooks() {
 
         if (error) throw error;
 
+        await logAudit({
+          user_id: user?.id,
+          action: 'UPDATE',
+          entity_type: 'runbook',
+          entity_id: data.id,
+          after_data: data
+        });
 
         showToast('Runbook atualizado com sucesso', 'success');
       } else {
@@ -78,6 +82,13 @@ export function Runbooks() {
 
         if (error) throw error;
 
+        await logAudit({
+          user_id: user?.id,
+          action: 'CREATE',
+          entity_type: 'runbook',
+          entity_id: data.id,
+          after_data: data
+        });
 
         showToast('Runbook criado com sucesso', 'success');
       }
@@ -123,6 +134,12 @@ export function Runbooks() {
 
       if (error) throw error;
 
+      await logAudit({
+        user_id: user?.id,
+        action: 'DELETE',
+        entity_type: 'runbook',
+        entity_id: id
+      });
 
       showToast('Runbook excluído com sucesso', 'success');
       setDeleteConfirm(null);
@@ -139,8 +156,6 @@ export function Runbooks() {
     setEditingId(null);
     resetForm();
   }
-
-  const userCanManage = user ? canManage(user.role) : false;
 
   if (loading) {
     return (
@@ -159,7 +174,7 @@ export function Runbooks() {
           <h1 className="text-3xl font-semibold text-gray-900 dark:text-gray-100">Runbooks</h1>
           <p className="text-gray-600 dark:text-gray-400 mt-1">Procedimentos e documentação técnica</p>
         </div>
-        {userCanManage && (
+        {canManage(user!.role) && (
           <Button onClick={() => setShowModal(true)}>
             <Plus className="w-4 h-4 mr-2" />
             Novo Runbook
@@ -194,7 +209,7 @@ export function Runbooks() {
                 </span>
               </div>
 
-              {userCanManage && (
+              {canManage(user!.role) && (
                 <div className="flex gap-2 pt-3 mt-3 border-t dark:border-gray-700">
                   <Button
                     variant="secondary"

@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
-import { canManage } from '../lib/utils';
 import { Card } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
@@ -8,7 +7,9 @@ import { Input } from '../components/ui/Input';
 import { Modal } from '../components/ui/Modal';
 import { useToast } from '../components/ui/Toast';
 import { useAuth } from '../contexts/AuthContext';
-import { CheckSquare, Plus, CreditCard as Edit2, Trash2 } from 'lucide-react';
+import { canManage } from '../lib/auth';
+import { logAudit } from '../lib/audit';
+import { CheckSquare, Plus, Edit2, Trash2 } from 'lucide-react';
 
 export function Checklists() {
   const { user } = useAuth();
@@ -32,11 +33,7 @@ export function Checklists() {
 
   async function loadChecklists() {
     try {
-      const { data, error } = await supabase
-        .from('checklists')
-        .select('*');
-
-      if (error) throw error;
+      const { data } = await supabase.from('checklists').select('*').order('title');
       if (data) setChecklists(data);
     } catch (error) {
       console.error('Error loading checklists:', error);
@@ -60,6 +57,13 @@ export function Checklists() {
 
         if (error) throw error;
 
+        await logAudit({
+          user_id: user?.id,
+          action: 'UPDATE',
+          entity_type: 'checklist',
+          entity_id: data.id,
+          after_data: data
+        });
 
         showToast('Checklist atualizado com sucesso', 'success');
       } else {
@@ -71,6 +75,13 @@ export function Checklists() {
 
         if (error) throw error;
 
+        await logAudit({
+          user_id: user?.id,
+          action: 'CREATE',
+          entity_type: 'checklist',
+          entity_id: data.id,
+          after_data: data
+        });
 
         showToast('Checklist criado com sucesso', 'success');
       }
@@ -114,6 +125,12 @@ export function Checklists() {
 
       if (error) throw error;
 
+      await logAudit({
+        user_id: user?.id,
+        action: 'DELETE',
+        entity_type: 'checklist',
+        entity_id: id
+      });
 
       showToast('Checklist excluído com sucesso', 'success');
       setDeleteConfirm(null);
@@ -130,8 +147,6 @@ export function Checklists() {
     setEditingId(null);
     resetForm();
   }
-
-  const userCanManage = user ? canManage(user.role) : false;
 
   if (loading) {
     return (
@@ -150,7 +165,7 @@ export function Checklists() {
           <h1 className="text-3xl font-semibold text-gray-900 dark:text-gray-100">Checklists</h1>
           <p className="text-gray-600 dark:text-gray-400 mt-1">Checklists operacionais e procedimentos</p>
         </div>
-        {userCanManage && (
+        {canManage(user!.role) && (
           <Button onClick={() => setShowModal(true)}>
             <Plus className="w-4 h-4 mr-2" />
             Novo Checklist
@@ -176,7 +191,7 @@ export function Checklists() {
                 <p className="text-sm text-gray-600 dark:text-gray-400 mt-3">{checklist.description}</p>
               )}
 
-              {userCanManage && (
+              {canManage(user!.role) && (
                 <div className="flex gap-2 pt-3 mt-3 border-t dark:border-gray-700">
                   <Button
                     variant="secondary"

@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
-import { canManage } from '../lib/utils';
 import { Card } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
@@ -9,7 +8,9 @@ import { Select } from '../components/ui/Select';
 import { Modal } from '../components/ui/Modal';
 import { useToast } from '../components/ui/Toast';
 import { useAuth } from '../contexts/AuthContext';
-import { Activity, Plus, CreditCard as Edit2, Trash2, Radio, Server, RefreshCw } from 'lucide-react';
+import { canManage } from '../lib/auth';
+import { logAudit } from '../lib/audit';
+import { Activity, Plus, Edit2, Trash2, Radio, Server, RefreshCw } from 'lucide-react';
 
 interface MonitorConfig {
   id: string;
@@ -237,6 +238,13 @@ export function Monitoring() {
 
         if (error) throw error;
 
+        await logAudit({
+          user_id: user?.id,
+          action: 'UPDATE',
+          entity_type: 'monitoring_config',
+          entity_id: data.id,
+          after_data: data
+        });
 
         showToast('Configuração atualizada com sucesso', 'success');
       } else {
@@ -248,6 +256,13 @@ export function Monitoring() {
 
         if (error) throw error;
 
+        await logAudit({
+          user_id: user?.id,
+          action: 'CREATE',
+          entity_type: 'monitoring_config',
+          entity_id: data.id,
+          after_data: data
+        });
 
         showToast('Configuração criada com sucesso', 'success');
       }
@@ -305,6 +320,12 @@ export function Monitoring() {
 
       if (error) throw error;
 
+      await logAudit({
+        user_id: user?.id,
+        action: 'DELETE',
+        entity_type: 'monitoring_config',
+        entity_id: id
+      });
 
       showToast('Configuração excluída com sucesso', 'success');
       setDeleteConfirm(null);
@@ -327,8 +348,6 @@ export function Monitoring() {
     SNMP: Server,
     ZABBIX: Activity
   };
-
-  const userCanManage = user ? canManage(user.role) : false;
 
   const typeColors: Record<string, 'success' | 'info' | 'warning'> = {
     ICMP: 'success',
@@ -372,7 +391,7 @@ export function Monitoring() {
             <RefreshCw className={`w-4 h-4 mr-2 ${autoRefreshing ? 'animate-spin' : ''}`} />
             Atualizar Agora
           </Button>
-          {userCanManage && (
+          {canManage(user!.role) && (
             <Button onClick={() => setShowModal(true)}>
               <Plus className="w-4 h-4 mr-2" />
               Nova Configuração
@@ -480,7 +499,7 @@ export function Monitoring() {
                     )}
                   </Button>
 
-                  {userCanManage && (
+                  {canManage(user!.role) && (
                     <div className="flex gap-2">
                       <Button
                         variant="secondary"

@@ -9,7 +9,9 @@ import { Input } from '../../components/ui/Input';
 import { Select } from '../../components/ui/Select';
 import { useToast } from '../../components/ui/Toast';
 import { useAuth } from '../../contexts/AuthContext';
-import { Plus, Users as UsersIcon, Trash2, CreditCard as Edit2, Key } from 'lucide-react';
+import { hashPassword } from '../../lib/auth';
+import { logAudit } from '../../lib/audit';
+import { Plus, Users as UsersIcon, Trash2, Edit2, Key } from 'lucide-react';
 
 export function Users() {
   const { user: currentUser } = useAuth();
@@ -39,11 +41,7 @@ export function Users() {
 
   async function loadUsers() {
     try {
-      const { data, error } = await supabase
-        .from('users')
-        .select('*');
-
-      if (error) throw error;
+      const { data } = await supabase.from('users').select('*').order('email');
       if (data) setUsers(data);
     } catch (error) {
       console.error('Error loading users:', error);
@@ -69,35 +67,39 @@ export function Users() {
 
         if (error) throw error;
 
+        await logAudit({
+          user_id: currentUser?.id,
+          action: 'UPDATE',
+          entity_type: 'user',
+          entity_id: data.id,
+          after_data: { ...data, password_hash: undefined }
+        });
 
         showToast('Usuário atualizado com sucesso', 'success');
       } else {
-        const { data: authData, error: authError } = await supabase.auth.signUp({
-          email: formData.email,
-          password: formData.password,
-          options: {
-            data: {
-              full_name: formData.full_name,
-              role: formData.role
-            }
-          }
+        const passwordHash = await hashPassword(formData.password);
+
+        const { password, ...userDataWithoutPassword } = formData;
+
+        const { data, error } = await supabase
+          .from('users')
+          .insert([{
+            ...userDataWithoutPassword,
+            password_hash: passwordHash,
+            is_active: true
+          }])
+          .select()
+          .single();
+
+        if (error) throw error;
+
+        await logAudit({
+          user_id: currentUser?.id,
+          action: 'CREATE',
+          entity_type: 'user',
+          entity_id: data.id,
+          after_data: { ...data, password_hash: undefined }
         });
-
-        if (authError) throw authError;
-
-        if (authData.user) {
-          const { password, ...userDataWithoutPassword } = formData;
-
-          const { error: insertError } = await supabase
-            .from('users')
-            .insert([{
-              id: authData.user.id,
-              ...userDataWithoutPassword,
-              is_active: true
-            }]);
-
-          if (insertError) throw insertError;
-        }
 
         showToast('Usuário criado com sucesso', 'success');
       }
@@ -151,18 +153,22 @@ export function Users() {
     if (!passwordUserId || !newPassword) return;
 
     try {
-      const { error } = await supabase.auth.admin.updateUserById(
-        passwordUserId,
-        { password: newPassword }
-      );
+      const passwordHash = await hashPassword(newPassword);
 
-      if (error && error.message.includes('admin')) {
-        showToast('Funcionalidade requer acesso admin. Use o Supabase Dashboard para alterar senhas.', 'error');
-        return;
-      }
+      const { error } = await supabase
+        .from('users')
+        .update({ password_hash: passwordHash })
+        .eq('id', passwordUserId);
 
-      if (updateError) throw updateError;
+      if (error) throw error;
 
+      await logAudit({
+        user_id: currentUser?.id,
+        action: 'UPDATE',
+        entity_type: 'user',
+        entity_id: passwordUserId,
+        after_data: { action: 'password_changed' }
+      });
 
       showToast('Senha alterada com sucesso', 'success');
       setShowPasswordModal(false);
@@ -188,6 +194,12 @@ export function Users() {
 
       if (error) throw error;
 
+      await logAudit({
+        user_id: currentUser?.id,
+        action: 'DELETE',
+        entity_type: 'user',
+        entity_id: userId
+      });
 
       showToast('Usuário deletado com sucesso', 'success');
       setDeleteUserId(null);

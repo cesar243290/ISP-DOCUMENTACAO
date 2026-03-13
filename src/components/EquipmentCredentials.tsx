@@ -1,11 +1,13 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
+import { encrypt, decrypt } from '../lib/crypto';
 import { Modal } from './ui/Modal';
 import { Button } from './ui/Button';
 import { Input } from './ui/Input';
 import { useToast } from './ui/Toast';
 import { useAuth } from '../contexts/AuthContext';
-import { Key, Eye, EyeOff, Plus, CreditCard as Edit2, Trash2 } from 'lucide-react';
+import { logAudit } from '../lib/audit';
+import { Key, Eye, EyeOff, Plus, Edit2, Trash2 } from 'lucide-react';
 
 interface Credential {
   id: string;
@@ -55,18 +57,6 @@ export function EquipmentCredentials({ equipmentId, equipmentName, isOpen, onClo
     }
   }, [isOpen, equipmentId]);
 
-  async function encrypt(value: string): Promise<string> {
-    return btoa(value);
-  }
-
-  async function decrypt(value: string): Promise<string> {
-    try {
-      return atob(value);
-    } catch {
-      return value;
-    }
-  }
-
   async function loadCredentials() {
     setLoading(true);
     try {
@@ -112,6 +102,13 @@ export function EquipmentCredentials({ equipmentId, equipmentName, isOpen, onClo
 
         if (error) throw error;
 
+        await logAudit({
+          user_id: user?.id,
+          action: 'UPDATE',
+          entity_type: 'credential',
+          entity_id: data.id,
+          after_data: { ...data, password_encrypted: '[ENCRYPTED]', enable_encrypted: '[ENCRYPTED]' }
+        });
 
         showToast('Credencial atualizada com sucesso', 'success');
       } else {
@@ -123,6 +120,13 @@ export function EquipmentCredentials({ equipmentId, equipmentName, isOpen, onClo
 
         if (error) throw error;
 
+        await logAudit({
+          user_id: user?.id,
+          action: 'CREATE',
+          entity_type: 'credential',
+          entity_id: data.id,
+          after_data: { ...data, password_encrypted: '[ENCRYPTED]', enable_encrypted: '[ENCRYPTED]' }
+        });
 
         showToast('Credencial criada com sucesso', 'success');
       }
@@ -175,9 +179,15 @@ export function EquipmentCredentials({ equipmentId, equipmentName, isOpen, onClo
 
   async function handleDelete(id: string) {
     try {
-      const { error } = await api.delete();
+      const { error } = await supabase.from('credentials').delete().eq('id', id);
       if (error) throw error;
 
+      await logAudit({
+        user_id: user?.id,
+        action: 'DELETE',
+        entity_type: 'credential',
+        entity_id: id
+      });
 
       showToast('Credencial excluída com sucesso', 'success');
       loadCredentials();

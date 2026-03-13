@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
-import { canManage } from '../lib/utils';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
@@ -9,7 +8,9 @@ import { Select } from '../components/ui/Select';
 import { Modal } from '../components/ui/Modal';
 import { useToast } from '../components/ui/Toast';
 import { useAuth } from '../contexts/AuthContext';
-import { Plus, Globe, CreditCard as Edit2, Trash2 } from 'lucide-react';
+import { canManage } from '../lib/auth';
+import { logAudit } from '../lib/audit';
+import { Plus, Globe, Edit2, Trash2 } from 'lucide-react';
 
 export function IPAM() {
   const { user } = useAuth();
@@ -35,11 +36,7 @@ export function IPAM() {
 
   async function loadSubnets() {
     try {
-      const { data, error } = await supabase
-        .from('subnets')
-        .select('*');
-
-      if (error) throw error;
+      const { data } = await supabase.from('subnets').select('*').order('cidr');
       if (data) setSubnets(data);
     } catch (error) {
       console.error('Error loading subnets:', error);
@@ -63,6 +60,13 @@ export function IPAM() {
 
         if (error) throw error;
 
+        await logAudit({
+          user_id: user?.id,
+          action: 'UPDATE',
+          entity_type: 'subnet',
+          entity_id: data.id,
+          after_data: data
+        });
 
         showToast('Sub-rede atualizada com sucesso', 'success');
       } else {
@@ -74,6 +78,13 @@ export function IPAM() {
 
         if (error) throw error;
 
+        await logAudit({
+          user_id: user?.id,
+          action: 'CREATE',
+          entity_type: 'subnet',
+          entity_id: data.id,
+          after_data: data
+        });
 
         showToast('Sub-rede criada com sucesso', 'success');
       }
@@ -121,6 +132,12 @@ export function IPAM() {
 
       if (error) throw error;
 
+      await logAudit({
+        user_id: user?.id,
+        action: 'DELETE',
+        entity_type: 'subnet',
+        entity_id: id
+      });
 
       showToast('Sub-rede excluída com sucesso', 'success');
       setDeleteConfirm(null);
@@ -137,8 +154,6 @@ export function IPAM() {
     setEditingId(null);
     resetForm();
   }
-
-  const userCanManage = user ? canManage(user.role) : false;
 
   const typeColors: Record<string, 'success' | 'info' | 'warning' | 'default'> = {
     CLIENT: 'success',
@@ -165,7 +180,7 @@ export function IPAM() {
           <h1 className="text-3xl font-semibold text-gray-900 dark:text-gray-100">IPAM</h1>
           <p className="text-gray-600 dark:text-gray-400 mt-1">Gerenciamento de endereços IP e sub-redes</p>
         </div>
-        {userCanManage && (
+        {canManage(user!.role) && (
           <Button onClick={() => setShowModal(true)}>
             <Plus className="w-4 h-4 mr-2" />
             Nova Sub-rede
@@ -204,7 +219,7 @@ export function IPAM() {
                   )}
                 </div>
 
-                {userCanManage && (
+                {canManage(user!.role) && (
                   <div className="flex gap-2">
                     <Button
                       variant="secondary"

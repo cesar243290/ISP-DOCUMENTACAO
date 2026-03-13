@@ -1,575 +1,355 @@
-# ISP NOC System - Ubuntu Server Deployment Guide
+# Deploy no Ubuntu Server - Guia Completo
 
-Complete guide for deploying the ISP NOC System on Ubuntu Server with MariaDB.
+Este guia mostra como fazer o deploy do ISP NOC Manager em um servidor Ubuntu.
 
-## System Architecture
+## Pré-requisitos
 
-```
-┌──────────────────────┐
-│   Nginx (Port 80)    │  ← User Access
-└──────────┬───────────┘
-           │
-     ┌─────┴─────┐
-     │           │
-┌────▼───┐  ┌───▼──────┐
-│ React  │  │ Express  │
-│ (SPA)  │  │   API    │
-└────────┘  └────┬─────┘
-                 │
-            ┌────▼────┐
-            │ MariaDB │
-            └─────────┘
-```
+- Ubuntu Server 20.04 ou superior
+- Acesso root ou sudo
+- Domínio apontando para o IP do servidor (para SSL)
+- Conta Supabase configurada
 
-## Prerequisites
-
-- Ubuntu Server 20.04 or 22.04
-- Root or sudo access
-- Minimum 2GB RAM
-- 20GB disk space
-
-## Quick Installation (Automated)
-
-The fastest way to deploy is using the provided script:
+## Passo 1: Atualizar o Sistema
 
 ```bash
-# 1. Upload files to server
-scp -r /path/to/project root@your-server:/opt/isp-noc
-
-# 2. SSH into server
-ssh root@your-server
-
-# 3. Run deployment script
-cd /opt/isp-noc
-chmod +x deploy.sh
-sudo ./deploy.sh
+sudo apt update
+sudo apt upgrade -y
 ```
 
-The script will:
-- Install Node.js, Nginx, MariaDB
-- Create database and import schema
-- Configure backend and frontend
-- Set up PM2 for process management
-- Configure Nginx reverse proxy
-- Start all services
-
-After completion, access your system at: `http://your-server-ip`
-
-## Manual Installation
-
-If you prefer to install manually, follow these steps:
-
-### 1. Install System Dependencies
+## Passo 2: Instalar Node.js e NPM
 
 ```bash
-# Update system
-sudo apt update && sudo apt upgrade -y
-
-# Install essentials
-sudo apt install -y curl wget git build-essential
-```
-
-### 2. Install Node.js 18.x
-
-```bash
-curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
+# Instalar Node.js 20.x
+curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
 sudo apt install -y nodejs
 
-# Verify installation
-node --version  # Should show v18.x.x
+# Verificar instalação
+node --version
 npm --version
 ```
 
-### 3. Install and Configure MariaDB
+## Passo 3: Instalar Nginx
 
 ```bash
-# Install MariaDB
-sudo apt install -y mariadb-server
-
-# Secure installation
-sudo mysql_secure_installation
-```
-
-Answer the prompts:
-- Set root password: **Yes**
-- Remove anonymous users: **Yes**
-- Disallow root login remotely: **Yes**
-- Remove test database: **Yes**
-- Reload privilege tables: **Yes**
-
-```bash
-# Create database and user
-sudo mysql
-
-# In MySQL prompt:
-CREATE DATABASE isp_noc CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-CREATE USER 'isp_user'@'localhost' IDENTIFIED BY 'your_secure_password';
-GRANT ALL PRIVILEGES ON isp_noc.* TO 'isp_user'@'localhost';
-FLUSH PRIVILEGES;
-EXIT;
-```
-
-### 4. Import Database Schema
-
-```bash
-# Navigate to project directory
-cd /opt/isp-noc
-
-# Import schema
-mysql -u isp_user -p isp_noc < server/database/schema.sql
-
-# Import seed data (creates admin user)
-mysql -u isp_user -p isp_noc < seed.sql
-```
-
-### 5. Configure Backend
-
-```bash
-cd /opt/isp-noc/server
-
-# Create .env file
-cat > .env <<EOF
-PORT=3001
-DB_HOST=localhost
-DB_USER=isp_user
-DB_PASSWORD=your_secure_password
-DB_NAME=isp_noc
-JWT_SECRET=$(openssl rand -base64 32)
-ENCRYPTION_KEY=$(openssl rand -base64 32)
-NODE_ENV=production
-EOF
-
-# Install dependencies
-npm install --production
-```
-
-### 6. Build Frontend
-
-```bash
-cd /opt/isp-noc
-
-# Create frontend .env
-cat > .env <<EOF
-VITE_API_URL=/api
-EOF
-
-# Install dependencies and build
-npm install
-npm run build
-```
-
-### 7. Install and Configure PM2
-
-```bash
-# Install PM2 globally
-sudo npm install -g pm2
-
-# Start backend
-cd /opt/isp-noc/server
-pm2 start server.js --name isp-noc-api
-
-# Save PM2 configuration
-pm2 save
-
-# Setup PM2 to start on boot
-pm2 startup systemd
-# Follow the command output
-```
-
-### 8. Install and Configure Nginx
-
-```bash
-# Install Nginx
 sudo apt install -y nginx
+sudo systemctl enable nginx
+sudo systemctl start nginx
+```
 
-# Create Nginx configuration
+## Passo 4: Clonar o Projeto
+
+```bash
+# Criar diretório para o projeto
+sudo mkdir -p /var/www/isp-noc
+cd /var/www/isp-noc
+
+# Se você tem o projeto em um repositório Git:
+# git clone https://seu-repositorio.git .
+
+# Caso contrário, transfira os arquivos via SCP:
+# No seu computador local, execute:
+# scp -r /caminho/do/projeto/* usuario@servidor:/var/www/isp-noc/
+```
+
+## Passo 5: Configurar Variáveis de Ambiente
+
+```bash
+cd /var/www/isp-noc
+
+# Criar arquivo .env
+sudo nano .env
+```
+
+Adicione as seguintes variáveis (substitua pelos seus valores do Supabase):
+
+```env
+VITE_SUPABASE_URL=https://seu-projeto.supabase.co
+VITE_SUPABASE_ANON_KEY=sua-chave-anonima
+```
+
+**IMPORTANTE**: Obtenha essas credenciais em:
+1. Acesse https://supabase.com/dashboard
+2. Selecione seu projeto
+3. Vá em Settings > API
+4. Copie a URL e a anon/public key
+
+## Passo 6: Instalar Dependências e Fazer Build
+
+```bash
+cd /var/www/isp-noc
+
+# Instalar dependências
+sudo npm install
+
+# Fazer build do projeto
+sudo npm run build
+```
+
+Isso criará uma pasta `dist` com os arquivos estáticos otimizados para produção.
+
+## Passo 7: Configurar Nginx
+
+```bash
+# Criar configuração do site
 sudo nano /etc/nginx/sites-available/isp-noc
 ```
 
-Paste this configuration:
+Adicione a seguinte configuração:
 
 ```nginx
 server {
     listen 80;
-    server_name your-domain.com;  # Change this to your domain or use _
+    server_name seu-dominio.com www.seu-dominio.com;
 
-    root /opt/isp-noc/dist;
+    root /var/www/isp-noc/dist;
     index index.html;
 
-    # Frontend - SPA routing
-    location / {
-        try_files $uri $uri/ /index.html;
-    }
-
-    # Backend API
-    location /api {
-        proxy_pass http://localhost:3001;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection 'upgrade';
-        proxy_set_header Host $host;
-        proxy_cache_bypass $http_upgrade;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-    }
+    # Compression
+    gzip on;
+    gzip_vary on;
+    gzip_min_length 1024;
+    gzip_types text/plain text/css text/xml text/javascript application/x-javascript application/xml+rss application/javascript application/json;
 
     # Security headers
     add_header X-Frame-Options "SAMEORIGIN" always;
     add_header X-Content-Type-Options "nosniff" always;
     add_header X-XSS-Protection "1; mode=block" always;
+    add_header Referrer-Policy "no-referrer-when-downgrade" always;
 
-    # Gzip compression
-    gzip on;
-    gzip_vary on;
-    gzip_min_length 1024;
-    gzip_types text/plain text/css text/xml text/javascript application/javascript application/xml+rss application/json;
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+
+    # Cache static assets
+    location ~* \.(jpg|jpeg|png|gif|ico|css|js|svg|woff|woff2|ttf|eot)$ {
+        expires 1y;
+        add_header Cache-Control "public, immutable";
+    }
+
+    # Disable access to hidden files
+    location ~ /\. {
+        deny all;
+    }
 }
 ```
 
+**Substitua** `seu-dominio.com` pelo seu domínio real.
+
+Ativar o site:
+
 ```bash
-# Enable site
+# Criar link simbólico
 sudo ln -s /etc/nginx/sites-available/isp-noc /etc/nginx/sites-enabled/
+
+# Remover site padrão
 sudo rm /etc/nginx/sites-enabled/default
 
-# Test configuration
+# Testar configuração
 sudo nginx -t
 
-# Restart Nginx
-sudo systemctl restart nginx
-sudo systemctl enable nginx
+# Recarregar Nginx
+sudo systemctl reload nginx
 ```
 
-### 9. Configure Firewall (Optional but Recommended)
+## Passo 8: Configurar Firewall
 
 ```bash
-# Allow SSH, HTTP, and HTTPS
-sudo ufw allow 22/tcp
-sudo ufw allow 80/tcp
-sudo ufw allow 443/tcp
-
-# Enable firewall
+# Permitir SSH, HTTP e HTTPS
+sudo ufw allow OpenSSH
+sudo ufw allow 'Nginx Full'
 sudo ufw enable
 ```
 
-## SSL/TLS Configuration (Recommended)
-
-Install Let's Encrypt certificate:
+## Passo 9: Instalar SSL com Let's Encrypt (Recomendado)
 
 ```bash
-# Install Certbot
+# Instalar Certbot
 sudo apt install -y certbot python3-certbot-nginx
 
-# Obtain certificate
-sudo certbot --nginx -d your-domain.com
+# Obter certificado SSL
+sudo certbot --nginx -d seu-dominio.com -d www.seu-dominio.com
 
-# Certbot will automatically:
-# - Obtain certificate
-# - Configure Nginx
-# - Set up auto-renewal
+# Certificado será renovado automaticamente
+# Testar renovação automática:
+sudo certbot renew --dry-run
 ```
 
-## Verification
+Certbot configurará automaticamente o SSL no Nginx.
 
-### Check Backend Status
+## Passo 10: Configurar Permissões
 
 ```bash
-# View PM2 status
-pm2 status
-
-# View backend logs
-pm2 logs isp-noc-api
-
-# Test API directly
-curl http://localhost:3001/health
+# Dar permissões corretas
+sudo chown -R www-data:www-data /var/www/isp-noc
+sudo chmod -R 755 /var/www/isp-noc
 ```
 
-Expected output:
-```json
-{"status":"ok","timestamp":"2024-03-12T..."}
-```
+## Passo 11: Testar a Aplicação
 
-### Check Frontend
+Abra seu navegador e acesse:
+- HTTP: `http://seu-dominio.com`
+- HTTPS: `https://seu-dominio.com` (se configurou SSL)
+
+Faça login com as credenciais:
+- **Email**: admin@ispnoc.local
+- **Senha**: Admin@123
+
+**IMPORTANTE**: Altere a senha padrão imediatamente após o primeiro login!
+
+## Atualização da Aplicação
+
+Quando precisar atualizar o código:
 
 ```bash
-# Test Nginx configuration
-sudo nginx -t
+cd /var/www/isp-noc
 
-# Check if frontend files exist
-ls -la /opt/isp-noc/dist
+# Fazer backup do .env
+cp .env .env.backup
 
-# View Nginx logs
+# Atualizar código (se usar Git)
+# git pull origin main
+
+# Reinstalar dependências (se necessário)
+sudo npm install
+
+# Fazer novo build
+sudo npm run build
+
+# Restaurar .env se necessário
+cp .env.backup .env
+
+# Recarregar Nginx
+sudo systemctl reload nginx
+```
+
+## Monitoramento de Logs
+
+```bash
+# Logs do Nginx - Acesso
 sudo tail -f /var/log/nginx/access.log
-sudo tail -f /var/log/nginx/error.log
-```
 
-### Check Database
-
-```bash
-# Connect to database
-mysql -u isp_user -p isp_noc
-
-# Verify tables
-SHOW TABLES;
-
-# Check admin user
-SELECT email, username, role FROM users WHERE role='ADMIN';
-
-# Exit
-EXIT;
-```
-
-## First Login
-
-1. Open browser: `http://your-server-ip` or `https://your-domain.com`
-2. Login with:
-   - **Email**: `admin@admin.com`
-   - **Password**: `admin123`
-3. **IMPORTANT**: Change the password immediately!
-
-## Maintenance
-
-### Update Application
-
-```bash
-cd /opt/isp-noc
-
-# Pull latest code (if using Git)
-git pull
-
-# Update backend
-cd server
-npm install --production
-pm2 restart isp-noc-api
-
-# Update frontend
-cd ..
-npm install
-npm run build
-
-# Clear browser cache
-```
-
-### Backup Database
-
-```bash
-# Create backup
-mysqldump -u isp_user -p isp_noc > backup_$(date +%Y%m%d_%H%M%S).sql
-
-# Restore backup
-mysql -u isp_user -p isp_noc < backup_20240312_120000.sql
-```
-
-### View Logs
-
-```bash
-# Backend logs (PM2)
-pm2 logs isp-noc-api
-pm2 logs isp-noc-api --lines 100
-
-# Nginx logs
-sudo tail -f /var/log/nginx/access.log
+# Logs do Nginx - Erros
 sudo tail -f /var/log/nginx/error.log
 
-# MariaDB logs
-sudo tail -f /var/log/mysql/error.log
-```
-
-### Restart Services
-
-```bash
-# Restart backend
-pm2 restart isp-noc-api
-
-# Restart Nginx
-sudo systemctl restart nginx
-
-# Restart MariaDB
-sudo systemctl restart mariadb
+# Verificar status do Nginx
+sudo systemctl status nginx
 ```
 
 ## Troubleshooting
 
-### Backend won't start
-
+### Erro 502 Bad Gateway
 ```bash
-# Check if port 3001 is in use
-sudo lsof -i :3001
-
-# Check PM2 logs
-pm2 logs isp-noc-api --err
-
-# Verify .env file
-cat /opt/isp-noc/server/.env
-
-# Test database connection
-mysql -u isp_user -p isp_noc -e "SELECT 1"
-```
-
-### Frontend shows blank page
-
-```bash
-# Check if build exists
-ls /opt/isp-noc/dist/
-
-# Check Nginx error logs
-sudo tail -f /var/log/nginx/error.log
-
-# Verify Nginx configuration
-sudo nginx -t
-
-# Check browser console for errors (F12)
-```
-
-### Can't login
-
-```bash
-# Verify admin user exists
-mysql -u isp_user -p isp_noc -e "SELECT email, username, role FROM users WHERE email='admin@admin.com'"
-
-# Check backend logs
-pm2 logs isp-noc-api
-
-# Clear browser localStorage
-# In browser console: localStorage.clear()
-
-# Re-import seed data if needed
-mysql -u isp_user -p isp_noc < seed.sql
-```
-
-### API returns 502 Bad Gateway
-
-```bash
-# Check if backend is running
-pm2 status
-
-# Check if backend is listening
-curl http://localhost:3001/health
-
-# Restart backend
-pm2 restart isp-noc-api
-
-# Check Nginx proxy configuration
+sudo systemctl restart nginx
 sudo nginx -t
 ```
 
-## Performance Tuning
+### Erro 403 Forbidden
+```bash
+sudo chown -R www-data:www-data /var/www/isp-noc
+sudo chmod -R 755 /var/www/isp-noc
+```
 
-### PM2 Cluster Mode
+### Páginas em branco ou erro ao carregar
+- Verifique se o arquivo `.env` está configurado corretamente
+- Verifique se as credenciais do Supabase estão corretas
+- Abra o Console do navegador (F12) para ver erros JavaScript
+
+### Build falha
+```bash
+# Limpar cache do npm
+sudo npm cache clean --force
+
+# Remover node_modules e reinstalar
+sudo rm -rf node_modules package-lock.json
+sudo npm install
+sudo npm run build
+```
+
+## Segurança Adicional (Recomendado)
+
+### 1. Instalar Fail2Ban (proteção contra brute force)
 
 ```bash
-# Stop current instance
-pm2 delete isp-noc-api
-
-# Start in cluster mode (uses all CPUs)
-pm2 start server.js --name isp-noc-api -i max
-
-# Save configuration
-pm2 save
+sudo apt install -y fail2ban
+sudo systemctl enable fail2ban
+sudo systemctl start fail2ban
 ```
 
-### Nginx Caching
-
-Add to Nginx configuration:
-
-```nginx
-# Cache static files
-location ~* \.(jpg|jpeg|png|gif|ico|css|js)$ {
-    expires 1y;
-    add_header Cache-Control "public, immutable";
-}
-```
-
-### MariaDB Optimization
-
-Edit `/etc/mysql/mariadb.conf.d/50-server.cnf`:
-
-```ini
-[mysqld]
-innodb_buffer_pool_size = 1G
-innodb_log_file_size = 256M
-max_connections = 200
-```
-
-Restart MariaDB:
-```bash
-sudo systemctl restart mariadb
-```
-
-## Security Best Practices
-
-1. **Change default passwords immediately**
-2. **Keep system updated**:
-   ```bash
-   sudo apt update && sudo apt upgrade
-   ```
-3. **Enable firewall** (UFW)
-4. **Use SSL/TLS** (Let's Encrypt)
-5. **Regular backups**
-6. **Monitor logs** regularly
-7. **Limit SSH access** (use SSH keys)
-8. **Use strong database passwords**
-
-## Monitoring
-
-### Setup System Monitoring
+### 2. Configurar atualizações automáticas
 
 ```bash
-# Install htop for resource monitoring
-sudo apt install -y htop
-
-# Monitor in real-time
-htop
+sudo apt install -y unattended-upgrades
+sudo dpkg-reconfigure --priority=low unattended-upgrades
 ```
 
-### PM2 Monitoring
+### 3. Desabilitar login root via SSH
 
 ```bash
-# Real-time monitoring
-pm2 monit
-
-# Generate startup script
-pm2 startup
+sudo nano /etc/ssh/sshd_config
+# Altere: PermitRootLogin no
+sudo systemctl restart sshd
 ```
 
-## Support
+## Backup
 
-For issues:
-1. Check logs: `pm2 logs isp-noc-api`
-2. Check Nginx: `sudo nginx -t`
-3. Check database connection
-4. Review this troubleshooting guide
+É importante fazer backup regularmente:
+
+```bash
+# Criar script de backup
+sudo nano /usr/local/bin/backup-isp-noc.sh
+```
+
+Adicione:
+
+```bash
+#!/bin/bash
+BACKUP_DIR="/var/backups/isp-noc"
+DATE=$(date +%Y%m%d-%H%M%S)
+
+mkdir -p $BACKUP_DIR
+
+# Backup dos arquivos
+tar -czf $BACKUP_DIR/isp-noc-$DATE.tar.gz /var/www/isp-noc
+
+# Manter apenas últimos 7 backups
+find $BACKUP_DIR -name "isp-noc-*.tar.gz" -mtime +7 -delete
+
+echo "Backup concluído: $BACKUP_DIR/isp-noc-$DATE.tar.gz"
+```
+
+Tornar executável e agendar:
+
+```bash
+sudo chmod +x /usr/local/bin/backup-isp-noc.sh
+
+# Agendar backup diário às 2h da manhã
+sudo crontab -e
+# Adicione a linha:
+# 0 2 * * * /usr/local/bin/backup-isp-noc.sh
+```
+
+## Suporte
+
+Para problemas com:
+- **Supabase**: Verifique o dashboard em https://supabase.com/dashboard
+- **Nginx**: `sudo nginx -t` para verificar erros de configuração
+- **Aplicação**: Verifique o Console do navegador (F12)
+
+## Checklist Final
+
+- [ ] Node.js instalado (versão 20.x ou superior)
+- [ ] Nginx instalado e rodando
+- [ ] Projeto em `/var/www/isp-noc`
+- [ ] Arquivo `.env` configurado com credenciais do Supabase
+- [ ] Build executado com sucesso (`npm run build`)
+- [ ] Configuração do Nginx criada e ativada
+- [ ] Firewall configurado (portas 22, 80, 443)
+- [ ] SSL configurado com Let's Encrypt
+- [ ] Permissões corretas (www-data)
+- [ ] Site acessível pelo navegador
+- [ ] Login funcionando
+- [ ] Senha padrão alterada
 
 ---
 
-## Quick Reference Commands
-
-```bash
-# Backend
-pm2 status                    # Check status
-pm2 logs isp-noc-api         # View logs
-pm2 restart isp-noc-api      # Restart
-pm2 stop isp-noc-api         # Stop
-
-# Frontend/Nginx
-sudo nginx -t                 # Test config
-sudo systemctl reload nginx   # Reload
-sudo systemctl restart nginx  # Restart
-
-# Database
-mysql -u isp_user -p isp_noc  # Connect
-pm2 flush                     # Clear PM2 logs
-
-# System
-sudo systemctl status nginx   # Check Nginx
-sudo systemctl status mariadb # Check DB
-df -h                         # Check disk space
-free -h                       # Check memory
-```
-
----
-
-**Deployment Status**: ✅ Production Ready
-**Architecture**: Self-hosted, No Supabase
-**Stack**: React + Express + MariaDB + Nginx
-**Last Updated**: 2024
+**Pronto!** Seu ISP NOC Manager está rodando em produção no Ubuntu Server.
